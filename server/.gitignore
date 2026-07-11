@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+logs/
+coverage/
+.nyc_output/
+prisma/migrations/
+*.tsbuildinfo

@@ -1,0 +1,859 @@
+// =============================================================================
+// Aether Mart — Complete Production Prisma Schema
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CUSTOMER
+  SHOPKEEPER
+  RIDER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  SUSPENDED
+}
+
+enum AuthMethod {
+  PHONE
+  EMAIL
+  GOOGLE
+  APPLE
+  WHATSAPP
+}
+
+enum AddressLabel {
+  Home
+  Work
+  Other
+}
+
+enum VehicleType {
+  BICYCLE
+  MOTORBIKE
+}
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  PACKING
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  COD
+  WALLET
+  RAZORPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  ACCEPTED
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
+
+enum CouponType {
+  FLAT
+  PERCENTAGE
+}
+
+enum LinkType {
+  CATEGORY
+  PRODUCT
+  STORE
+  EXTERNAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum WalletTxType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum ReferralStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+}
+
+enum OtpChannel {
+  SMS
+  EMAIL
+}
+
+// ─── USER & AUTH MODELS ───────────────────────────────────────────────────────
+
+model User {
+  id           String        @id @default(uuid())
+  phone        String?       @unique
+  email        String?       @unique
+  passwordHash String?
+  role         UserRole      @default(CUSTOMER)
+  status       UserStatus    @default(ACTIVE)
+  isActive     Boolean       @default(true)
+  isVerified   Boolean       @default(false)
+  fcmToken     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  // Relations
+  addresses      Address[]
+  customer       Customer?
+  merchant       Merchant?
+  rider          Rider?
+  refreshTokens  RefreshToken[]
+  auditLogs      AuditLog[]
+  supportTickets SupportTicket[]
+  notifications  Notification[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  deviceId  String?
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  family    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model OTPVerification {
+  id         String     @id @default(uuid())
+  identifier String // Phone or Email
+  otpHash    String
+  type       OtpChannel
+  role       UserRole
+  purpose    String
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  isUsed     Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([identifier])
+  @@map("otp_verifications")
+}
+
+// ─── PROFILE MODELS ───────────────────────────────────────────────────────────
+
+model Address {
+  id             String       @id @default(uuid())
+  userId         String
+  label          AddressLabel @default(Home)
+  receiverName   String
+  receiverPhone  String
+  streetAddress  String
+  apartmentSuite String?
+  postalCode     String
+  city           String
+  latitude       Float
+  longitude      Float
+  isDefault      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Customer {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  fullName      String?
+  loyaltyPoints Int      @default(0)
+  referralCode  String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wishlist          Wishlist[]
+  cart              Cart?
+  orders            Order[]
+  reviews           Review[]
+  wallet            Wallet?
+  referralsSent     Referral[]    @relation("Referrer")
+  referralsReceived Referral[]    @relation("Referee")
+  recentlyViewed    RecentlyViewed[]
+
+  @@map("customers")
+}
+
+model Merchant {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  fullName     String
+  gstNumber    String?
+  panNumber    String?
+  fssaiNumber  String?
+  isApproved   Boolean  @default(false)
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store?
+
+  @@map("merchants")
+}
+
+model Rider {
+  id                 String       @id @default(uuid())
+  userId             String       @unique
+  fullName           String
+  vehicleType        VehicleType
+  vehiclePlateNumber String?
+  licenseNumber      String?
+  isOnline           Boolean      @default(false)
+  isApproved         Boolean      @default(false)
+  currentLatitude    Float?
+  currentLongitude   Float?
+  rating             Float        @default(0.0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  // Relations
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments DeliveryAssignment[]
+  locationHistories RiderLocationHistory[]
+
+  @@index([isOnline])
+  @@map("riders")
+}
+
+model RiderLocationHistory {
+  id         String   @id @default(uuid())
+  riderId    String
+  latitude   Float
+  longitude  Float
+  recordedAt DateTime @default(now())
+
+  // Relations
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([riderId])
+  @@map("rider_location_history")
+}
+
+// ─── CATALOG MODELS ───────────────────────────────────────────────────────────
+
+model Category {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  imageUrl     String?
+  parentId     String?
+  isActive     Boolean  @default(true)
+  isFeatured   Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  parent         Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  subcategories  Category[] @relation("CategoryHierarchy")
+  products       Product[]
+
+  @@map("categories")
+}
+
+model Store {
+  id               String   @id @default(uuid())
+  merchantId       String   @unique
+  name             String
+  logoUrl          String?
+  bannerUrl        String?
+  rating           Float    @default(0.0)
+  deliveryTimeMins Int      @default(15)
+  address          String
+  latitude         Float
+  longitude        Float
+  isOpen           Boolean  @default(true)
+  commissionRate   Float    @default(0.10)
+  deliveryRadiusKm Float    @default(5.0)
+  openingTime      String   @default("09:00")
+  closingTime      String   @default("22:00")
+  isHoliday        Boolean  @default(false)
+  deletedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  merchant    Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  products    Product[]
+  inventories Inventory[]
+  offers      Offer[]
+  orders      Order[]
+  carts       Cart[]
+
+  @@index([latitude, longitude])
+  @@map("stores")
+}
+
+model Product {
+  id          String    @id @default(uuid())
+  storeId     String
+  categoryId  String
+  name          String
+  description   String
+  price         Float
+  discountPrice Float?
+  brand         String?
+  unit          String
+  weightGrams Float?
+  isOrganic   Boolean   @default(false)
+  isVegetarian Boolean  @default(true)
+  calories    Float?
+  proteinGrams Float?
+  carbGrams   Float?
+  fatGrams    Float?
+  sku         String
+  isActive    Boolean   @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category    Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  images      ProductImage[]
+  variants    ProductVariant[]
+  inventories Inventory[]
+  wishlist    Wishlist[]
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  reviews     Review[]
+  offers      Offer[]
+  recentlyViewed RecentlyViewed[]
+
+  @@index([storeId])
+  @@index([categoryId])
+  @@index([isActive])
+  @@map("products")
+}
+
+model ProductImage {
+  id           String   @id @default(uuid())
+  productId    String
+  url          String
+  isPrimary    Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id          String   @id @default(uuid())
+  productId   String
+  name        String
+  price       Float
+  sku         String
+  stock       Int      @default(0)
+  version     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  inventories Inventory[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model Inventory {
+  id                String          @id @default(uuid())
+  productId         String
+  variantId         String?
+  storeId           String
+  stockQty          Int             @default(0)
+  lowStockThreshold Int             @default(5)
+  version           Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  store   Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, productId, variantId])
+  @@index([productId])
+  @@map("inventories")
+}
+
+model Wishlist {
+  id         String   @id @default(uuid())
+  customerId String
+  productId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@map("wishlists")
+}
+
+// ─── CART MODELS ──────────────────────────────────────────────────────────────
+
+model Cart {
+  id         String   @id @default(uuid())
+  customerId String   @unique
+  storeId    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  store    Store?     @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  items    CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  productId String
+  variantId String?
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart    Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId, variantId])
+  @@map("cart_items")
+}
+
+// ─── ORDER & TRANSACTION MODELS ───────────────────────────────────────────────
+
+model Coupon {
+  id            String     @id @default(uuid())
+  code          String     @unique
+  type          CouponType
+  value         Float
+  minOrderValue Float      @default(0.0)
+  maxDiscount   Float?
+  usageLimit    Int        @default(1)
+  usageCount    Int        @default(0)
+  expiry        DateTime
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Relations
+  orders Order[]
+
+  @@map("coupons")
+}
+
+model Order {
+  id                    String        @id @default(uuid())
+  orderNumber           String        @unique
+  customerId            String
+  storeId               String
+  addressId             String
+  status                OrderStatus   @default(PLACED)
+  paymentMethod         PaymentMethod
+  paymentStatus         PaymentStatus @default(PENDING)
+  subtotal              Float
+  tax                   Float
+  deliveryFee           Float
+  handlingFee           Float
+  discount              Float         @default(0.0)
+  totalAmount           Float
+  couponId              String?
+  deliveryInstruction   String?
+  estimatedDeliveryTime DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Relations
+  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  deliveryAddress    Address             @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  coupon             Coupon?             @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  items              OrderItem[]
+  payment            Payment?
+  deliveryAssignment DeliveryAssignment?
+  reviews            Review[]
+
+  @@index([customerId])
+  @@index([storeId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String   @id @default(uuid())
+  orderId      String
+  productId    String
+  variantId    String?
+  productName  String
+  quantity     Int
+  unitPrice    Float
+  variantLabel String?
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@map("order_items")
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  orderId          String        @unique
+  gatewayOrderId   String?
+  gatewayPaymentId String?
+  amount           Float
+  status           PaymentStatus @default(PENDING)
+  method           String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("payments")
+}
+
+model Transaction {
+  id         String            @id @default(uuid())
+  paymentId  String
+  type       TransactionType
+  amount     Float
+  status     TransactionStatus @default(PENDING)
+  gatewayRef String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  // Relations
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
+// ─── DELIVERY MODELS ──────────────────────────────────────────────────────────
+
+model DeliveryAssignment {
+  id          String         @id @default(uuid())
+  orderId     String         @unique
+  riderId     String
+  status      DeliveryStatus @default(ASSIGNED)
+  pickupOtp   String
+  deliveryOtp String
+  acceptedAt  DateTime?
+  pickedAt    DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relations
+  order     Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rider     Rider              @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  trackings DeliveryTracking[]
+
+  @@index([riderId])
+  @@map("delivery_assignments")
+}
+
+model DeliveryTracking {
+  id           String   @id @default(uuid())
+  assignmentId String
+  latitude     Float
+  longitude    Float
+  heading      Float?
+  speed        Float?
+  recordedAt   DateTime @default(now())
+
+  // Relations
+  assignment DeliveryAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+  @@map("delivery_trackings")
+}
+
+// ─── ENGAGEMENT & MARKETING MODELS ────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  type      String
+  isRead    Boolean  @default(false)
+  data      String? // JSON string
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  customerId String
+  productId  String
+  orderId    String?
+  rating     Int
+  comment    String?
+  images     String? // JSON array of urls
+  isVerified Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order    Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@map("reviews")
+}
+
+model Rating {
+  id         String   @id @default(uuid())
+  targetId   String
+  targetType String // STORE, RIDER, PRODUCT
+  customerId String
+  score      Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([targetId, targetType])
+  @@map("ratings")
+}
+
+model Banner {
+  id           String    @id @default(uuid())
+  title        String
+  imageUrl     String
+  linkType     LinkType
+  linkTarget   String
+  isActive     Boolean   @default(true)
+  displayOrder Int       @default(0)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("banners")
+}
+
+model Offer {
+  id        String   @id @default(uuid())
+  storeId   String?
+  productId String?
+  type      String // DISCOUNT, BOGO, etc.
+  value     Float
+  label     String
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  store   Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("offers")
+}
+
+// ─── ADMIN & SYSTEM MODELS ────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  targetType  String
+  targetId    String?
+  beforeValue String? // JSON
+  afterValue  String? // JSON
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model AppSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+model SupportTicket {
+  id          String       @id @default(uuid())
+  userId      String
+  subject     String
+  description String
+  status      TicketStatus @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("support_tickets")
+}
+
+model Referral {
+  id           String         @id @default(uuid())
+  referrerId   String
+  refereeId    String         @unique
+  status       ReferralStatus @default(PENDING)
+  rewardAmount Float          @default(0.0)
+  earnedAt     DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // Relations
+  referrer Customer @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee  Customer @relation("Referee", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@map("referrals")
+}
+
+model Wallet {
+  id         String   @id @default(uuid())
+  customerId String   @unique
+  balance    Float    @default(0.0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer     Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id          String       @id @default(uuid())
+  walletId    String
+  amount      Float
+  type        WalletTxType
+  description String?
+  reference   String?
+  createdAt   DateTime     @default(now())
+
+  // Relations
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@map("wallet_transactions")
+}
+
+model RecentlyViewed {
+  id         String   @id @default(uuid())
+  customerId String
+  productId  String
+  viewedAt   DateTime @default(now())
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+  @@map("recently_viewed")
+}

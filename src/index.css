@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-primary: hsl(var(--bg-primary));
+  --color-bg-secondary: hsl(var(--bg-secondary));
+  --color-bg-tertiary: hsl(var(--bg-tertiary));
+  --color-text-primary: hsl(var(--text-primary));
+  --color-text-secondary: hsl(var(--text-secondary));
+  --color-border-primary: hsl(var(--border-primary));
+  
+  --color-brand-emerald: hsl(var(--brand-emerald));
+  --color-brand-emerald-hover: hsl(var(--brand-emerald-hover));
+  --color-brand-violet: hsl(var(--brand-violet));
+  
+  --color-status-success: hsl(var(--status-success));
+  --color-status-warning: hsl(var(--status-warning));
+  --color-status-error: hsl(var(--status-error));
+  --color-status-info: hsl(var(--status-info));
+  
+  --shadow-low: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-mid: 0 10px 20px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.02);
+  --shadow-high: 0 20px 40px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.04);
+  
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  
+  --font-heading: "Outfit", sans-serif;
+  --font-body: "Inter", sans-serif;
+
+  --z-sticky: 100;
+  --z-overlay: 200;
+  --z-drawer: 300;
+  --z-dialog: 400;
+  --z-toast: 500;
+  
+  --breakpoint-uw: 2560px;
+}
+
+:root {
+  --bg-primary: 210 20% 98%;          /* Slate-50 */
+  --bg-secondary: 0 0% 100%;          /* White */
+  --bg-tertiary: 210 20% 95%;         /* Slate-100/50 */
+  --text-primary: 222 47% 11%;        /* Slate-900 */
+  --text-secondary: 215 16% 47%;      /* Slate-500 */
+  --border-primary: 214 32% 91%;      /* Slate-200 */
+  
+  --brand-emerald: 162 84% 39%;       /* Primary green (#10b981) */
+  --brand-emerald-hover: 162 84% 30%;
+  --brand-violet: 262 80% 50%;        /* Secondary violet */
+  
+  --status-success: 142 76% 36%;
+  --status-warning: 38 92% 50%;
+  --status-error: 0 84% 60%;
+  --status-info: 214 94% 50%;
+}
+
+.dark {
+  --bg-primary: 222 47% 6%;           /* Slate-950 */
+  --bg-secondary: 222 47% 11%;        /* Slate-900 */
+  --bg-tertiary: 217 33% 17%;         /* Slate-800 */
+  --text-primary: 210 40% 98%;        /* Slate-50 */
+  --text-secondary: 215 20% 65%;      /* Slate-400 */
+  --border-primary: 217 33% 17%;      /* Slate-800 */
+  
+  --brand-emerald: 162 84% 45%;
+  --brand-emerald-hover: 162 84% 50%;
+  
+  --status-success: 142 76% 45%;
+  --status-warning: 38 92% 55%;
+  --status-error: 0 84% 65%;
+  --status-info: 214 94% 55%;
+}
+
+/* Base resets and defaults */
+@layer base {
+  * {
+    @apply border-border-primary;
+  }
+  
+  body {
+    @apply bg-bg-primary text-text-primary font-body antialiased transition-colors duration-200;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-semibold tracking-tight;
+  }
+  
+  /* Standard focus indicators for keyboard navigation */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    @apply outline-none ring-2 ring-brand-emerald ring-offset-2 ring-offset-bg-secondary;
+  }
+}
