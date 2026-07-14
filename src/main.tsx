@@ -8,8 +8,6 @@ import { ThemeProvider } from './core/theme/ThemeProvider';
 import { ToastProvider } from './context/ToastProvider';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { AppRouter } from './router';
-import { ModalContainer } from './components/ui/modal-manager/ModalContainer';
-import { DrawerContainer } from './components/ui/drawer-manager/DrawerContainer';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -18,8 +16,6 @@ createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
           <ToastProvider>
             <AppRouter />
-            <ModalContainer />
-            <DrawerContainer />
           </ToastProvider>
         </ThemeProvider>
       </QueryProvider>

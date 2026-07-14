@@ -35,11 +35,17 @@ export class CartService {
     const product = await catalogRepository.findProductById(productId);
     if (!product) throw new NotFoundError('Product');
 
-    const variant = variantId
-      ? product.variants.find((v: any) => v.id === variantId)
+    // Default to the first variant if none is specified but the product has variants
+    let targetVariantId = variantId;
+    if (!targetVariantId && product.variants && product.variants.length > 0) {
+      targetVariantId = product.variants[0].id;
+    }
+
+    const variant = targetVariantId
+      ? product.variants.find((v: any) => v.id === targetVariantId)
       : null;
 
-    if (variantId && !variant) {
+    if (targetVariantId && !variant) {
       throw new NotFoundError('Product Variant');
     }
 
@@ -94,7 +100,7 @@ export class CartService {
     }
 
     // Upsert item
-    await cartRepository.upsertCartItem(cart.id, productId, variantId, quantity);
+    await cartRepository.upsertCartItem(cart.id, productId, targetVariantId, quantity);
 
     // Reload and return details
     const updated = await cartRepository.findCartByCustomerId(customerId);

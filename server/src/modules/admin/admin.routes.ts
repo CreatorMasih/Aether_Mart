@@ -536,4 +536,7 @@ router.get('/analytics/categories', adminController.getCategoryAnalytics);
  */
 router.post('/jobs/trigger', adminController.triggerJobs);
 
+router.get('/audit-logs', adminController.getAuditLogs);
+router.put('/merchants/:merchantId/commission', adminController.updateMerchantCommission);
+
 export default router;

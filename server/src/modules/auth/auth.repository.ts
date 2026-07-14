@@ -23,6 +23,7 @@ export class AuthRepository extends BaseRepository {
     return this.db.user.findUnique({
       where: { id },
       include: {
+        addresses: true,
         customer: true,
         merchant: {
           include: {

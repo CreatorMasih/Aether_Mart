@@ -13,6 +13,10 @@ export const updateMerchantProfileSchema = z.object({
   openingTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Must be in HH:MM format').optional(),
   closingTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Must be in HH:MM format').optional(),
   isHoliday: z.boolean().optional(),
+  minimumOrderValue: z.number().min(0).optional(),
+  deliveryFee: z.number().min(0).optional(),
+  bankAccount: z.string().optional(),
+  bankName: z.string().optional(),
 });
 
 export const productVariantInputSchema = z.object({

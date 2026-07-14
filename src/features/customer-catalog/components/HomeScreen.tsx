@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Flame, History, Heart, MapPin, Sparkles, Star, Milk, Pill, Apple, ShieldAlert } from 'lucide-react';
+import { Flame, History, Heart, MapPin, Sparkles, Star, Milk, Pill, Apple, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
-import { MOCK_PRODUCTS } from '../services/mock-catalog-data';
+import { catalogService } from '../services/catalog-service';
+import { queryKeys } from '../../../core/network/queryKeys';
 import { BannerSlider } from './BannerSlider';
 import { CategoryCircleGrid } from './CategoryCircleGrid';
 import { ProductCardGrid } from './ProductCardGrid';
 import { StoreCardGrid } from './StoreCardGrid';
-import { heroReveal } from '../../../core/theme/animations';
+import { pageTransition } from '../../../core/theme/animations';
+
 
 export const HomeScreen: React.FC = () => {
-  const { wishlist, recentlyViewed } = useCustomerStore();
+  const { wishlist, recentlyViewed, selectedAddress } = useCustomerStore();
   const [countdown, setCountdown] = useState<string>('09:59');
 
   // Simulated flash deals 10-minute ticker loop
@@ -29,15 +32,52 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Filter products by category/section
-  const flashDealsProducts = MOCK_PRODUCTS.filter(p => p.id === 'prod-apple-1' || p.id === 'prod-avocado-1');
-  const buyAgainProducts = MOCK_PRODUCTS.filter(p => p.id === 'prod-milk-1' || p.id === 'prod-bread-1');
-  const dailyEssentialsProducts = MOCK_PRODUCTS.filter(p => p.categorySlug === 'daily-essentials');
-  const pharmacyProducts = MOCK_PRODUCTS.filter(p => p.categorySlug === 'pharmacy');
-  const freshProduceProducts = MOCK_PRODUCTS.filter(p => p.categorySlug === 'fresh-fruits-and-vegetables');
-  const personalCareProducts = MOCK_PRODUCTS.filter(p => p.categorySlug === 'personal-care');
-  const petCareProducts = MOCK_PRODUCTS.filter(p => p.categorySlug === 'pet-care');
-  const electronicsProducts = MOCK_PRODUCTS.filter(p => p.categorySlug === 'electronics');
+  const lat = selectedAddress?.coordinates?.latitude;
+  const lng = selectedAddress?.coordinates?.longitude;
+
+  // 1. Fetch Dynamic Home Feed
+  const { data: homeFeed, isLoading: isFeedLoading, isError: isFeedError, refetch: refetchFeed } = useQuery({
+    queryKey: queryKeys.homeFeed(lat, lng),
+    queryFn: () => catalogService.getHomeFeed(lat, lng),
+  });
+
+  // 2. Parallel Category Shelf Queries
+  const { data: dailyEssentialsRes } = useQuery({
+    queryKey: queryKeys.products({ category: 'daily-essentials', limit: 4 }),
+    queryFn: () => catalogService.getProducts({ category: 'daily-essentials', limit: 4 }),
+  });
+
+  const { data: pharmacyRes } = useQuery({
+    queryKey: queryKeys.products({ category: 'pharmacy', limit: 4 }),
+    queryFn: () => catalogService.getProducts({ category: 'pharmacy', limit: 4 }),
+  });
+
+  const { data: freshProduceRes } = useQuery({
+    queryKey: queryKeys.products({ category: 'fresh-fruits-and-vegetables', limit: 4 }),
+    queryFn: () => catalogService.getProducts({ category: 'fresh-fruits-and-vegetables', limit: 4 }),
+  });
+
+  const { data: personalCareRes } = useQuery({
+    queryKey: queryKeys.products({ category: 'personal-care', limit: 4 }),
+    queryFn: () => catalogService.getProducts({ category: 'personal-care', limit: 4 }),
+  });
+
+  const { data: petCareRes } = useQuery({
+    queryKey: queryKeys.products({ category: 'pet-care', limit: 4 }),
+    queryFn: () => catalogService.getProducts({ category: 'pet-care', limit: 4 }),
+  });
+
+  const { data: electronicsRes } = useQuery({
+    queryKey: queryKeys.products({ category: 'electronics', limit: 4 }),
+    queryFn: () => catalogService.getProducts({ category: 'electronics', limit: 4 }),
+  });
+
+  const dailyEssentialsProducts = dailyEssentialsRes?.products || [];
+  const pharmacyProducts = pharmacyRes?.products || [];
+  const freshProduceProducts = freshProduceRes?.products || [];
+  const personalCareProducts = personalCareRes?.products || [];
+  const petCareProducts = petCareRes?.products || [];
+  const electronicsProducts = electronicsRes?.products || [];
 
   const renderSectionHeader = (icon: React.ReactNode, title: string, subtitle?: string, badge?: string) => (
     <div className="flex items-center justify-between mb-4">
@@ -49,7 +89,7 @@ export const HomeScreen: React.FC = () => {
           <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2">
             {title}
             {badge && (
-              <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-status-error/10 text-status-error tracking-wide uppercase">
+              <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-status-error/10 text-status-error tracking-wide uppercase font-semibold">
                 {badge}
               </span>
             )}
@@ -60,16 +100,47 @@ export const HomeScreen: React.FC = () => {
     </div>
   );
 
+  if (isFeedLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="h-8 w-8 rounded-full border-2 border-brand-emerald border-t-transparent animate-spin" />
+        <p className="text-xs text-text-secondary font-semibold">Loading your neighborhood storefront...</p>
+      </div>
+    );
+  }
+
+  if (isFeedError) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="p-3 rounded-full bg-status-error/10 text-status-error">
+          <AlertTriangle className="h-8 w-8" />
+        </div>
+        <h2 className="text-sm font-bold text-text-primary font-heading">Failed to Load Storefront</h2>
+        <p className="text-xs text-text-secondary max-w-xs">An error occurred while connecting to our server coordinates. Please check your network connection.</p>
+        <button 
+          onClick={() => refetchFeed()} 
+          className="px-4 py-2 bg-text-primary text-bg-secondary hover:bg-text-primary/95 text-xs font-bold rounded-lg cursor-pointer"
+        >
+          Try Reconnecting
+        </button>
+      </div>
+    );
+  }
+
+  const feed = homeFeed!;
+  const flashDealsProducts = feed.flashDeals.map((fd) => fd.product);
+  const buyAgainProducts = recentlyViewed.slice(0, 4);
+
   return (
     <motion.div
-      variants={heroReveal}
+      variants={pageTransition}
       initial="initial"
       animate="animate"
       className="space-y-8 pb-12"
     >
       {/* 1. Promotional Banners Carousel */}
       <section aria-label="Featured Offers">
-        <BannerSlider />
+        <BannerSlider banners={feed.banners} />
       </section>
 
       {/* 2. Instant Shop Categories Grid */}
@@ -78,25 +149,27 @@ export const HomeScreen: React.FC = () => {
       </section>
 
       {/* 3. 🔥 Flash Deals Countdown */}
-      <section className="p-5 rounded-2xl border border-status-error/10 bg-gradient-to-br from-status-error/5 via-bg-secondary to-bg-secondary">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-status-error/10 text-status-error shadow-subtle">
-              <Flame className="h-5 w-5 fill-status-error animate-pulse" />
+      {flashDealsProducts.length > 0 && (
+        <section className="p-5 rounded-2xl border border-status-error/10 bg-gradient-to-br from-status-error/5 via-bg-secondary to-bg-secondary">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-status-error/10 text-status-error shadow-subtle">
+                <Flame className="h-5 w-5 fill-status-error animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2">
+                  Flash Deals
+                </h2>
+                <p className="text-[10px] text-text-secondary font-semibold mt-0.5">Closing soon! Flat 50% Off</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2">
-                Flash Deals
-              </h2>
-              <p className="text-[10px] text-text-secondary font-semibold mt-0.5">Closing soon! Flat 50% Off</p>
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-status-error text-white font-heading text-xs font-extrabold shadow-subtle animate-bounce">
+              {countdown}
             </div>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-status-error text-white font-heading text-xs font-extrabold shadow-subtle animate-bounce">
-            {countdown}
-          </div>
-        </div>
-        <ProductCardGrid products={flashDealsProducts} />
-      </section>
+          <ProductCardGrid products={flashDealsProducts} />
+        </section>
+      )}
 
       {/* 4. 🕒 Buy Again */}
       {buyAgainProducts.length > 0 && (
@@ -119,10 +192,16 @@ export const HomeScreen: React.FC = () => {
       </section>
 
       {/* 6. 📍 Nearby Stores */}
-      <section>
-        {renderSectionHeader(<MapPin className="h-5 w-5" />, 'Nearby Stores', 'Hyperlocal merchants delivering in your area')}
-        <StoreCardGrid />
-      </section>
+      {feed.nearbyStores.length > 0 ? (
+        <section>
+          {renderSectionHeader(<MapPin className="h-5 w-5" />, 'Nearby Stores', 'Hyperlocal merchants delivering in your area')}
+          <StoreCardGrid stores={feed.nearbyStores} />
+        </section>
+      ) : (
+        <section className="p-6 rounded-2xl border border-dashed border-border-primary text-center">
+          <p className="text-xs text-text-secondary">No nearby merchants found operating in your coordinates.</p>
+        </section>
+      )}
 
       {/* 7. 🛒 Continue Shopping */}
       {recentlyViewed.length > 0 && (
@@ -133,70 +212,85 @@ export const HomeScreen: React.FC = () => {
       )}
 
       {/* 8. ⭐ Top Rated Products */}
-      <section>
-        {renderSectionHeader(<Star className="h-5 w-5 fill-status-warning text-status-warning" />, 'Top Rated Products', 'Favorites with 4.8+ user reviews')}
-        <ProductCardGrid products={MOCK_PRODUCTS.slice(0, 4)} />
-      </section>
+      {feed.recommendedProducts.length > 0 && (
+        <section>
+          {renderSectionHeader(<Star className="h-5 w-5 fill-status-warning text-status-warning" />, 'Top Rated Products', 'Favorites with 4.8+ user reviews')}
+          <ProductCardGrid products={feed.recommendedProducts} />
+        </section>
+      )}
 
       {/* 9. 🥛 Daily Essentials */}
-      <section>
-        {renderSectionHeader(<Milk className="h-5 w-5" />, 'Daily Essentials', 'Milk, bread, butter, eggs & baking')}
-        <ProductCardGrid products={dailyEssentialsProducts} />
-      </section>
+      {dailyEssentialsProducts.length > 0 && (
+        <section>
+          {renderSectionHeader(<Milk className="h-5 w-5" />, 'Daily Essentials', 'Milk, bread, butter, eggs & baking')}
+          <ProductCardGrid products={dailyEssentialsProducts} />
+        </section>
+      )}
 
       {/* 10. 💊 Pharmacy */}
-      <section>
-        {renderSectionHeader(<Pill className="h-5 w-5" />, 'Pharmacy Essentials', 'OTC medicines, wellness, and care', '12 Min')}
-        <ProductCardGrid products={pharmacyProducts} />
-      </section>
+      {pharmacyProducts.length > 0 && (
+        <section>
+          {renderSectionHeader(<Pill className="h-5 w-5" />, 'Pharmacy Essentials', 'OTC medicines, wellness, and care', '12 Min')}
+          <ProductCardGrid products={pharmacyProducts} />
+        </section>
+      )}
 
       {/* 11. 🍎 Fresh Fruits & Vegetables */}
-      <section>
-        {renderSectionHeader(<Apple className="h-5 w-5" />, 'Fresh Fruits & Vegetables', 'Farm-fresh organic vegetables and seasonal fruits')}
-        <ProductCardGrid products={freshProduceProducts} />
-      </section>
+      {freshProduceProducts.length > 0 && (
+        <section>
+          {renderSectionHeader(<Apple className="h-5 w-5" />, 'Fresh Fruits & Vegetables', 'Farm-fresh organic vegetables and seasonal fruits')}
+          <ProductCardGrid products={freshProduceProducts} />
+        </section>
+      )}
 
       {/* 12. 🧴 Personal Care */}
-      <section>
-        {renderSectionHeader(<Sparkles className="h-5 w-5" />, 'Personal Care', 'Shampoos, body washes, skin lotions')}
-        <ProductCardGrid products={personalCareProducts} />
-      </section>
+      {personalCareProducts.length > 0 && (
+        <section>
+          {renderSectionHeader(<Sparkles className="h-5 w-5" />, 'Personal Care', 'Shampoos, body washes, skin lotions')}
+          <ProductCardGrid products={personalCareProducts} />
+        </section>
+      )}
 
       {/* 13. 🐶 Pet Care */}
-      <section>
-        {renderSectionHeader(<Sparkles className="h-5 w-5" />, 'Pet Care', 'Kibble, treats, grooming, and pet hygiene')}
-        <ProductCardGrid products={petCareProducts} />
-      </section>
+      {petCareProducts.length > 0 && (
+        <section>
+          {renderSectionHeader(<Sparkles className="h-5 w-5" />, 'Pet Care', 'Kibble, treats, grooming, and pet hygiene')}
+          <ProductCardGrid products={petCareProducts} />
+        </section>
+      )}
 
-      {/* 14. 📱 Electronics Expansion (Future) */}
-      <section className="relative opacity-70 group">
-        {renderSectionHeader(<ShieldAlert className="h-5 w-5" />, 'Electronics & Devices', 'Cables, adapter fast chargers, earbuds', 'COMING SOON')}
-        <div className="absolute inset-0 z-10 bg-bg-primary/30 backdrop-blur-[1px] flex items-center justify-center pointer-events-none rounded-2xl border border-dashed border-border-primary">
-          <span className="text-[10px] font-extrabold px-3 py-1 rounded bg-text-primary text-bg-secondary shadow-subtle uppercase tracking-wider font-heading">
-            Coming Soon to your pincode
-          </span>
-        </div>
-        <ProductCardGrid products={electronicsProducts} />
-      </section>
+      {/* 14. 📱 Electronics Expansion */}
+      {electronicsProducts.length > 0 && (
+        <section className="relative opacity-70 group">
+          {renderSectionHeader(<ShieldAlert className="h-5 w-5" />, 'Electronics & Devices', 'Cables, adapter fast chargers, earbuds', 'COMING SOON')}
+          <div className="absolute inset-0 z-10 bg-bg-primary/30 backdrop-blur-[1px] flex items-center justify-center pointer-events-none rounded-2xl border border-dashed border-border-primary">
+            <span className="text-[10px] font-extrabold px-3 py-1 rounded bg-text-primary text-bg-secondary shadow-subtle uppercase tracking-wider font-heading">
+              Coming Soon to your pincode
+            </span>
+          </div>
+          <ProductCardGrid products={electronicsProducts} />
+        </section>
+      )}
 
       {/* 15. 🎉 Seasonal Offers */}
-      <section className="p-6 rounded-2xl border border-border-primary bg-gradient-to-r from-violet-500/10 via-fuchsia-500/5 to-bg-secondary flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="space-y-1 text-center md:text-left">
-          <span className="text-[8px] font-extrabold px-2 py-0.5 rounded bg-brand-violet/10 text-brand-violet font-heading tracking-wide uppercase">
-            SEASONAL FESTIVAL
-          </span>
-          <h3 className="text-base font-extrabold text-text-primary leading-tight font-heading">
-            Monsoon Care Specials
-          </h3>
-          <p className="text-xs text-text-secondary">
-            Equip yourself with umbrellas, mosquito repellents, herbal teas, and sanitizers.
-          </p>
-        </div>
-        <button className="py-2 px-4 rounded-lg bg-text-primary text-bg-secondary hover:bg-text-primary/90 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 self-center">
-          Browse Monsoon Deals
-        </button>
-      </section>
-
+      {feed.seasonalOffers.length > 0 && (
+        <section className="p-6 rounded-2xl border border-border-primary bg-gradient-to-r from-violet-500/10 via-fuchsia-500/5 to-bg-secondary flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="space-y-1 text-center md:text-left">
+            <span className="text-[8px] font-extrabold px-2 py-0.5 rounded bg-brand-violet/10 text-brand-violet font-heading tracking-wide uppercase font-semibold">
+              SEASONAL FESTIVAL
+            </span>
+            <h3 className="text-base font-extrabold text-text-primary leading-tight font-heading">
+              {feed.seasonalOffers[0].title}
+            </h3>
+            <p className="text-xs text-text-secondary">
+              Equip yourself with active deals on seasonal products from nearby coordinate stores.
+            </p>
+          </div>
+          <button className="py-2 px-4 rounded-lg bg-text-primary text-bg-secondary hover:bg-text-primary/90 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 self-center">
+            Browse Monsoon Deals
+          </button>
+        </section>
+      )}
     </motion.div>
   );
 };

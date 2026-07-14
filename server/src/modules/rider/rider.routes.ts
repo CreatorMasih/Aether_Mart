@@ -9,9 +9,11 @@ const router = Router();
 router.use(authenticate);
 router.use(requireRider);
 
-// Heartbeat & Profile
+// Heartbeat, Profile & Earnings
 router.put('/profile', riderController.updateProfile);
 router.post('/heartbeat', riderController.heartbeat);
+router.get('/earnings', riderController.getEarnings);
+router.post('/payout', riderController.requestPayout);
 
 // Job Discovery & Assignments
 router.get('/deliveries/available', riderController.getAvailableDeliveries);

@@ -108,6 +108,21 @@ export class AuthService {
     const fullUser = await authRepository.findUserWithProfile(user.id);
     const isProfileComplete = this.checkProfileCompletion(fullUser);
 
+    const savedAddresses = (fullUser.addresses || []).map((addr: any) => ({
+      id: addr.id,
+      label: addr.label,
+      receiverName: addr.receiverName,
+      receiverPhone: addr.receiverPhone,
+      streetAddress: addr.streetAddress,
+      apartmentSuite: addr.apartmentSuite || undefined,
+      postalCode: addr.postalCode,
+      city: addr.city,
+      coordinates: {
+        latitude: addr.latitude,
+        longitude: addr.longitude,
+      },
+    }));
+
     const userSession = {
       id: user.id,
       phone: user.phone || undefined,
@@ -117,6 +132,7 @@ export class AuthService {
       isProfileComplete,
       walletBalance: fullUser.customer?.wallet?.balance || 0,
       avatarUrl: undefined,
+      savedAddresses,
     };
 
     return {
@@ -277,6 +293,21 @@ export class AuthService {
 
     // Return the updated session details
     const updatedUser = await authRepository.findUserWithProfile(user.id);
+    const updatedAddresses = (updatedUser.addresses || []).map((addr: any) => ({
+      id: addr.id,
+      label: addr.label,
+      receiverName: addr.receiverName,
+      receiverPhone: addr.receiverPhone,
+      streetAddress: addr.streetAddress,
+      apartmentSuite: addr.apartmentSuite || undefined,
+      postalCode: addr.postalCode,
+      city: addr.city,
+      coordinates: {
+        latitude: addr.latitude,
+        longitude: addr.longitude,
+      },
+    }));
+
     return {
       id: updatedUser.id,
       phone: updatedUser.phone || undefined,
@@ -286,6 +317,7 @@ export class AuthService {
       isProfileComplete: true,
       walletBalance: updatedUser.customer?.wallet?.balance || 0,
       avatarUrl: undefined,
+      savedAddresses: updatedAddresses,
     };
   }
 
@@ -297,6 +329,20 @@ export class AuthService {
     if (!user) throw new NotFoundError('User');
 
     const isProfileComplete = this.checkProfileCompletion(user);
+    const savedAddresses = (user.addresses || []).map((addr: any) => ({
+      id: addr.id,
+      label: addr.label,
+      receiverName: addr.receiverName,
+      receiverPhone: addr.receiverPhone,
+      streetAddress: addr.streetAddress,
+      apartmentSuite: addr.apartmentSuite || undefined,
+      postalCode: addr.postalCode,
+      city: addr.city,
+      coordinates: {
+        latitude: addr.latitude,
+        longitude: addr.longitude,
+      },
+    }));
 
     return {
       id: user.id,
@@ -308,6 +354,7 @@ export class AuthService {
       walletBalance: user.customer?.wallet?.balance || 0,
       avatarUrl: undefined,
       profile: user.customer || user.merchant || user.rider || null,
+      savedAddresses,
     };
   }
 

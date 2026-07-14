@@ -163,6 +163,7 @@ export class OrderService {
             handlingFee: pricing.handlingFee,
             discount: pricing.discount,
             totalAmount: pricing.totalAmount,
+            driverTip: splitOrdersCount === 1 ? (params.driverTip || 0.0) : 0.0,
             couponId: pricing.coupon?.id || null,
             deliveryInstruction: params.deliveryInstruction || null,
           },

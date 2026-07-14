@@ -1,13 +1,15 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Heart, Plus, Minus } from 'lucide-react';
 import { useCustomerStore } from '../store/customer-store';
-import { useCartStore } from '../../customer-checkout/store/cart-store';
+import { useCartMutations } from '../../customer-checkout/hooks/useCartMutations';
+import { queryKeys } from '../../../core/network/queryKeys';
 import { formatCurrency, formatWeight } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 import { cardHover, buttonPress } from '../../../core/theme/animations';
-import type { Product } from '../../../types';
+import type { Product, CartData } from '../../../types';
 
 interface ProductCardGridProps {
   products: Product[];
@@ -15,8 +17,13 @@ interface ProductCardGridProps {
 
 export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { wishlist, toggleWishlist } = useCustomerStore();
-  const { items, addItem, updateQuantity } = useCartStore();
+  const { addToCart, updateQuantity } = useCartMutations();
+
+  // Read cart items from React Query cache (single source of truth)
+  const cartData = queryClient.getQueryData<CartData>(queryKeys.cart());
+  const cartItems = cartData?.items ?? [];
 
   const handleCardClick = (slug: string) => {
     navigate(`/c/product/${slug}`);
@@ -26,7 +33,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
       {products.map((product) => {
         const isWishlisted = wishlist.some((item) => item.id === product.id);
-        const cartItem = items.find((item) => item.product.id === product.id && !item.selectedVariantId);
+        const cartItem = cartItems.find((item) => item.productId === product.id && !item.variantId);
         const quantity = cartItem?.quantity || 0;
 
         return (
@@ -50,7 +57,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
             </button>
 
             {/* Product details wrapper */}
-            <div 
+            <div
               onClick={() => handleCardClick(product.sku)}
               className="cursor-pointer space-y-2.5 flex-1 flex flex-col justify-between"
             >
@@ -86,11 +93,10 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
                 {formatCurrency(product.price)}
               </span>
 
-              {/* Snappy counter button */}
               {quantity > 0 ? (
                 <div className="flex items-center gap-2 bg-brand-emerald text-white rounded-lg px-2 py-1 shadow-subtle border border-brand-emerald-hover">
                   <button
-                    onClick={() => updateQuantity(product.id, quantity - 1)}
+                    onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1 })}
                     className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"
                     aria-label="Decrease quantity"
                   >
@@ -98,7 +104,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
                   </button>
                   <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
                   <button
-                    onClick={() => updateQuantity(product.id, quantity + 1)}
+                    onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1 })}
                     className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"
                     aria-label="Increase quantity"
                   >
@@ -110,7 +116,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
                   variants={buttonPress}
                   whileTap="whileTap"
                   whileHover="whileHover"
-                  onClick={() => addItem(product)}
+                  onClick={() => addToCart({ productId: product.id, quantity: 1 })}
                   className="px-3 py-1.5 rounded-lg border border-brand-emerald/40 hover:border-brand-emerald bg-bg-secondary text-brand-emerald hover:bg-brand-emerald/5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                 >
                   <Plus className="h-3 w-3" />

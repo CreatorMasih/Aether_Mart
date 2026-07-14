@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, 
@@ -21,10 +22,12 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../auth/store/auth-store';
 import { useCustomerStore } from '../store/customer-store';
-import { useCartStore } from '../../customer-checkout/store/cart-store';
 import { useTheme } from '../../../core/theme/useTheme';
-import { useToast } from '../../../hooks/useToast';
+import { queryKeys } from '../../../core/network/queryKeys';
+import { orderService } from '../../customer-checkout/services/order-service';
 import { formatCurrency } from '../../../utils/formatters';
+import { ORDER_STATUS_LABELS } from '../../../core/config/constants';
+import { useToast } from '../../../hooks/useToast';
 import { cn } from '../../../utils/cn';
 import { pageTransition } from '../../../core/theme/animations';
 
@@ -38,7 +41,6 @@ export const CustomerDashboardPage: React.FC = () => {
   const { theme, setTheme } = useTheme();
   const { user, clearSession, addSavedAddress } = useAuthStore();
   const { setSelectedAddress } = useCustomerStore();
-  const { addItem } = useCartStore();
 
   // Active Tab state synced with search param
   const activeTab = (searchParams.get('tab') as TabType) || 'profile';
@@ -60,7 +62,8 @@ export const CustomerDashboardPage: React.FC = () => {
   const [newAddrZip, setNewAddrZip] = useState('');
   const [newAddrCity, setNewAddrCity] = useState('');
 
-  // Notifications State (Mock data)
+  // TODO: Replace with GET /customer/notifications when backend route is implemented.
+  // No backend notification endpoint exists yet. Using static fallback until then.
   const [notifications, setNotifications] = useState([
     { id: '1', title: 'Order Dispatched', message: 'Ramesh is out for delivery with your fresh avocados.', date: '10 mins ago', category: 'ORDER', read: false },
     { id: '2', title: '₹50 Cashback coins credited!', message: 'Coins credited for order #98223.', date: '1 hour ago', category: 'COINS', read: false },
@@ -68,17 +71,13 @@ export const CustomerDashboardPage: React.FC = () => {
     { id: '4', title: 'Secure server settings upgrade', message: 'We updated our payment encryption systems.', date: '2 days ago', category: 'SYSTEM', read: true }
   ]);
 
-  // Orders Mock history
-  const [orderHistory] = useState([
-    { id: 'ORD-554231', date: '02 July 2026', total: 420, itemsCount: 3, status: 'DELIVERED', items: [
-      { id: 'p1', name: 'Organic Bananas', price: 60, quantity: 2, unit: '500g' },
-      { id: 'p2', name: 'Fresh Milk', price: 40, quantity: 1, unit: '500ml' }
-    ]},
-    { id: 'ORD-332194', date: '28 June 2026', total: 1150, itemsCount: 5, status: 'DELIVERED', items: [
-      { id: 'p3', name: 'Atta Flour', price: 250, quantity: 1, unit: '5kg' },
-      { id: 'p4', name: 'Daily Bread', price: 45, quantity: 1, unit: '400g' }
-    ]}
-  ]);
+  // Order history from backend (GET /customer/orders)
+  const { data: orderHistory = [], isLoading: ordersLoading } = useQuery({
+    queryKey: queryKeys.orderHistory(),
+    queryFn: () => orderService.getOrderHistory(1, 20),
+    staleTime: 60_000,
+    retry: 2,
+  });
 
   const handleUpdateProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,26 +131,13 @@ export const CustomerDashboardPage: React.FC = () => {
     setNewAddrCity('');
   };
 
-  const handleReorder = (itemsList: any[]) => {
-    itemsList.forEach((item) => {
-      // Create product mock to append
-      const mockProduct = {
-        id: item.id,
-        name: item.name,
-        description: 'Storefront item description details.',
-        price: item.price,
-        imageUrl: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=400&q=80',
-        unit: item.unit,
-        stock: 10,
-        sku: `reorder-${item.id}`,
-        categorySlug: 'grocery'
-      };
-      addItem(mockProduct);
-    });
+  // Reorder navigates to home so user can re-add from catalog (no mock cart injection)
+  const handleReorder = (_orderId: string) => {
+    navigate('/c/home');
     showToast({
       type: 'success',
-      title: 'Cart Updated',
-      description: `Reordered ${itemsList.length} items to your shopping cart bag.`,
+      title: 'Browse to Reorder',
+      description: 'Find items from the catalog to add to your cart.',
     });
   };
 
@@ -405,55 +391,71 @@ export const CustomerDashboardPage: React.FC = () => {
                 Order History & Invoices
               </h2>
 
-              <div className="space-y-4">
-                {orderHistory.map((order) => (
-                  <div key={order.id} className="p-4 rounded-xl border border-border-primary bg-bg-tertiary/60 space-y-3 text-xs font-semibold">
-                    <div className="flex items-center justify-between border-b border-border-primary/60 pb-2">
-                      <div>
-                        <span className="text-text-primary font-bold">{order.id}</span>
-                        <span className="text-[10px] text-text-secondary block font-semibold mt-0.5">{order.date}</span>
-                      </div>
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 bg-brand-emerald/10 text-brand-emerald rounded uppercase">
-                        {order.status}
-                      </span>
-                    </div>
-
-                    {/* Items brief */}
-                    <div className="text-text-secondary text-[11px] space-y-1">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between">
-                          <span>{item.name} ({item.unit}) x {item.quantity}</span>
-                          <span className="text-text-primary font-heading">{formatCurrency(item.price * item.quantity)}</span>
+              {ordersLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-28 rounded-xl bg-bg-tertiary animate-pulse" />
+                  ))}
+                </div>
+              ) : orderHistory.length === 0 ? (
+                <div className="text-center py-10 border border-dashed border-border-primary rounded-xl">
+                  <p className="text-xs text-text-secondary">No orders yet. Start shopping!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {orderHistory.map((order) => (
+                    <div key={order.id} className="p-4 rounded-xl border border-border-primary bg-bg-tertiary/60 space-y-3 text-xs font-semibold">
+                      <div className="flex items-center justify-between border-b border-border-primary/60 pb-2">
+                        <div>
+                          <span className="text-text-primary font-bold">
+                            #{order.orderNumber || order.id.substring(0, 8).toUpperCase()}
+                          </span>
+                          <span className="text-[10px] text-text-secondary block font-semibold mt-0.5">
+                            {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
                         </div>
-                      ))}
-                    </div>
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 bg-brand-emerald/10 text-brand-emerald rounded uppercase">
+                          {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                        </span>
+                      </div>
 
-                    <div className="border-t border-border-primary/60 pt-2 flex items-center justify-between">
-                      <span className="font-extrabold text-text-primary">Total: {formatCurrency(order.total)}</span>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleDownloadInvoice(order.id)}
-                          className="px-2.5 py-1.5 border border-border-primary bg-bg-secondary hover:bg-bg-primary rounded-lg text-[10px] font-bold text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1"
-                        >
-                          <FileText className="h-3 w-3" /> Invoice
-                        </button>
-                        <button 
-                          onClick={() => handleRefundRequest(order.id)}
-                          className="px-2.5 py-1.5 border border-border-primary bg-bg-secondary hover:bg-bg-primary rounded-lg text-[10px] font-bold text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1"
-                        >
-                          Return / Refund
-                        </button>
-                        <button 
-                          onClick={() => handleReorder(order.items)}
-                          className="px-3 py-1.5 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1"
-                        >
-                          <RefreshCw className="h-3 w-3" /> Reorder
-                        </button>
+                      {/* Items */}
+                      <div className="text-text-secondary text-[11px] space-y-1">
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between">
+                            <span>{item.productName} × {item.quantity}</span>
+                            <span className="text-text-primary font-heading">{formatCurrency(item.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-border-primary/60 pt-2 flex items-center justify-between">
+                        <span className="font-extrabold text-text-primary">Total: {formatCurrency(order.totalAmount)}</span>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleDownloadInvoice(order.id)}
+                            className="px-2.5 py-1.5 border border-border-primary bg-bg-secondary hover:bg-bg-primary rounded-lg text-[10px] font-bold text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1"
+                          >
+                            <FileText className="h-3 w-3" /> Invoice
+                          </button>
+                          <button 
+                            onClick={() => handleRefundRequest(order.id)}
+                            className="px-2.5 py-1.5 border border-border-primary bg-bg-secondary hover:bg-bg-primary rounded-lg text-[10px] font-bold text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1"
+                          >
+                            Return / Refund
+                          </button>
+                          <button 
+                            onClick={() => handleReorder(order.id)}
+                            className="px-3 py-1.5 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1"
+                          >
+                            <RefreshCw className="h-3 w-3" /> Reorder
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

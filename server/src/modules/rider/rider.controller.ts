@@ -135,6 +135,36 @@ export class RiderController {
       next(error);
     }
   };
+
+  public getEarnings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const stats = await riderService.getEarnings(userId);
+      sendSuccess(res, stats, 'Rider earnings metrics retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public requestPayout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const payout = await riderService.requestPayout(userId);
+      sendSuccess(res, payout, 'Rider wallet balance payout processed successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const riderController = new RiderController();

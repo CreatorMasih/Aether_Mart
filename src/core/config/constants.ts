@@ -55,13 +55,15 @@ export const ROUTES = {
 
 export const API_ENDPOINTS = {
   auth: {
-    login: '/auth/login',
+    login: '/auth/send-otp',
     verifyOtp: '/auth/verify-otp',
     refresh: '/auth/refresh',
     logout: '/auth/logout',
+    me: '/auth/me',
+    completeProfile: '/auth/complete-profile',
   },
   customer: {
-    profile: '/customer/profile',
+    profile: '/auth/complete-profile',
     addresses: '/customer/addresses',
     products: '/customer/products',
     categories: '/customer/categories',

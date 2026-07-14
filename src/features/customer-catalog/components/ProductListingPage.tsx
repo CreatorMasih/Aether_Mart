@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -13,14 +13,17 @@ import {
   AlertCircle,
   ChevronDown
 } from 'lucide-react';
-import { MOCK_PRODUCTS, MOCK_CATEGORIES } from '../services/mock-catalog-data';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
-import { useCartStore } from '../../customer-checkout/store/cart-store';
+import { useCartMutations } from '../../customer-checkout/hooks/useCartMutations';
 import { useInfiniteScroll } from '../../../hooks/useInfiniteScroll';
 import { useToast } from '../../../hooks/useToast';
+import { catalogService } from '../services/catalog-service';
+import { queryKeys } from '../../../core/network/queryKeys';
 import { formatCurrency, formatWeight } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 import { pageTransition, cardHover } from '../../../core/theme/animations';
+import type { CatalogProduct } from '../services/catalog-mappers';
 
 export const ProductListingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -28,9 +31,14 @@ export const ProductListingPage: React.FC = () => {
   const searchQuery = searchParams.get('q');
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { wishlist, toggleWishlist } = useCustomerStore();
-  const { items, addItem, updateQuantity } = useCartStore();
+  const { toggleWishlist: storeToggleWishlist } = useCustomerStore();
+  const { addToCart, updateQuantity } = useCartMutations();
+
+  // Read cart items from React Query cache (single source of truth)
+  const cartData = queryClient.getQueryData<import('../../../types').CartData>(queryKeys.cart());
+  const cartItems = cartData?.items ?? [];
 
   // Layout View Switch: 'GRID' or 'LIST'
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
@@ -45,83 +53,115 @@ export const ProductListingPage: React.FC = () => {
   const [filterInStock, setFilterInStock] = useState(false);
   const [priceRange, setPriceRange] = useState<number>(1000);
 
-  // Pagination / Load More Simulation
-  const [displayLimit, setDisplayLimit] = useState(6);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // Pagination / Load More State
+  const [page, setPage] = useState(1);
+  const [accumulatedProducts, setAccumulatedProducts] = useState<CatalogProduct[]>([]);
 
-  // Match active category
+  // Fetch Categories for page title
+  const { data: categories } = useQuery({
+    queryKey: queryKeys.categories(),
+    queryFn: () => catalogService.getCategories(),
+  });
+
   const activeCategory = useMemo(() => {
-    if (!slug) return null;
-    return MOCK_CATEGORIES.find(c => c.slug === slug) || null;
-  }, [slug]);
+    if (!slug || !categories) return null;
+    return categories.find(c => c.slug === slug) || null;
+  }, [slug, categories]);
 
-  // Compute matched products
-  const rawProducts = useMemo(() => {
-    let list = [...MOCK_PRODUCTS];
+  // Fetch Wishlist for highlighting active state
+  const { data: wishlistData } = useQuery({
+    queryKey: queryKeys.wishlist(),
+    queryFn: () => catalogService.getWishlist(),
+  });
+  const wishlist = wishlistData || [];
 
-    // Filter by Category slug
-    if (slug && slug !== 'all') {
-      list = list.filter(p => p.categorySlug === slug);
+  // Centralized toggle wishlist mutation
+  const toggleWishlistMutation = useMutation({
+    mutationFn: async (product: CatalogProduct) => {
+      const isWishlisted = wishlist.some(item => item.id === product.id);
+      if (isWishlisted) {
+        return catalogService.removeFromWishlist(product.id);
+      } else {
+        return catalogService.addToWishlist(product.id);
+      }
+    },
+    onMutate: async (product: CatalogProduct) => {
+      // Optimistic Update
+      await queryClient.cancelQueries({ queryKey: queryKeys.wishlist() });
+      const previousWishlist = queryClient.getQueryData<CatalogProduct[]>(queryKeys.wishlist()) || [];
+      const exists = previousWishlist.some(item => item.id === product.id);
+      const newWishlist = exists
+        ? previousWishlist.filter(item => item.id !== product.id)
+        : [...previousWishlist, product];
+      queryClient.setQueryData(queryKeys.wishlist(), newWishlist);
+      storeToggleWishlist(product);
+      return { previousWishlist };
+    },
+    onError: (_err, _product, context) => {
+      if (context) {
+        queryClient.setQueryData(queryKeys.wishlist(), context.previousWishlist);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wishlist() });
+      queryClient.invalidateQueries({ queryKey: ['homeFeed'] });
     }
+  });
 
-    // Filter by Search Query
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(p => 
-        p.name.toLowerCase().includes(q) || 
-        p.description.toLowerCase().includes(q)
-      );
-    }
+  // Construct query parameter DTO
+  const queryParams = useMemo(() => {
+    return {
+      page,
+      limit: 8,
+      category: slug && slug !== 'all' ? slug : undefined,
+      search: searchQuery || undefined,
+      organic: filterOrganic ? 'true' : undefined,
+      inStock: filterInStock ? 'true' : undefined,
+      maxPrice: priceRange < 1000 ? priceRange : undefined,
+      sort: sortBy === 'PRICE_LOW' ? 'price_asc' 
+          : sortBy === 'PRICE_HIGH' ? 'price_desc' 
+          : sortBy === 'RATING' ? 'rating' 
+          : 'popularity',
+    };
+  }, [page, slug, searchQuery, filterOrganic, filterInStock, priceRange, sortBy]);
 
-    // Apply filters
-    if (filterOrganic) {
-      list = list.filter(p => p.isOrganic);
-    }
-    if (filterInStock) {
-      list = list.filter(p => p.stock > 0);
-    }
-    list = list.filter(p => p.price <= priceRange);
+  const { data: pageData, isLoading, isFetching, isError } = useQuery({
+    queryKey: queryKeys.products(queryParams),
+    queryFn: () => catalogService.getProducts(queryParams),
+  });
 
-    // Apply Sorting
-    switch (sortBy) {
-      case 'PRICE_LOW':
-        list.sort((a, b) => a.price - b.price);
-        break;
-      case 'PRICE_HIGH':
-        list.sort((a, b) => b.price - a.price);
-        break;
-      case 'RATING':
-        list.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'POPULARITY':
-      default:
-        list.sort((a, b) => b.reviewsCount - a.reviewsCount);
-        break;
-    }
-
-    return list;
+  // Reset page and products when parameters change
+  useEffect(() => {
+    setPage(1);
+    setAccumulatedProducts([]);
   }, [slug, searchQuery, filterOrganic, filterInStock, priceRange, sortBy]);
 
-  // Paginated subset
-  const visibleProducts = useMemo(() => {
-    return rawProducts.slice(0, displayLimit);
-  }, [rawProducts, displayLimit]);
+  // Accumulate products list as page data updates
+  useEffect(() => {
+    if (pageData) {
+      if (page === 1) {
+        setAccumulatedProducts(pageData.products);
+      } else {
+        setAccumulatedProducts((prev) => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newProducts = pageData.products.filter(p => !existingIds.has(p.id));
+          return [...prev, ...newProducts];
+        });
+      }
+    }
+  }, [pageData, page]);
 
-  const hasMore = visibleProducts.length < rawProducts.length;
+  const hasMore = pageData ? page < pageData.pages : false;
 
   const loadNextPage = () => {
-    if (!hasMore || isLoadingMore) return;
-    setIsLoadingMore(true);
-    setTimeout(() => {
-      setDisplayLimit(prev => prev + 4);
-      setIsLoadingMore(false);
-    }, 800);
+    if (!hasMore || isFetching) return;
+    setPage((prev) => prev + 1);
   };
 
   const { triggerRef } = useInfiniteScroll({
     loadMore: loadNextPage,
     hasMore,
-    loading: isLoadingMore,
+    loading: isFetching,
     rootMargin: '150px',
   });
 
@@ -140,6 +180,30 @@ export const ProductListingPage: React.FC = () => {
     ? `Search Results for "${searchQuery}"` 
     : activeCategory?.name || 'All Catalog Products';
 
+  if (isLoading && page === 1) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="h-8 w-8 rounded-full border-2 border-brand-emerald border-t-transparent animate-spin" />
+        <p className="text-xs text-text-secondary font-semibold">Loading listing products...</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="p-3 rounded-full bg-status-error/10 text-status-error">
+          <AlertCircle className="h-8 w-8" />
+        </div>
+        <h2 className="text-sm font-bold text-text-primary font-heading">Failed to Load Products</h2>
+        <p className="text-xs text-text-secondary">Please check your internet connection and try reloading.</p>
+        <button onClick={() => navigate('/c/home')} className="px-4 py-2 bg-text-primary text-bg-secondary hover:bg-text-primary/95 text-xs font-bold rounded-lg cursor-pointer">
+          Back to Home
+        </button>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       variants={pageTransition}
@@ -155,7 +219,7 @@ export const ProductListingPage: React.FC = () => {
             {pageTitle}
           </h1>
           <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-            {rawProducts.length} items found
+            {pageData?.total || 0} items found
           </p>
         </div>
 
@@ -247,19 +311,18 @@ export const ProductListingPage: React.FC = () => {
       </div>
 
       {/* 2. Products Grid / List Viewport */}
-      {visibleProducts.length > 0 ? (
+      {accumulatedProducts.length > 0 ? (
         <div className="space-y-6">
           {viewMode === 'GRID' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {visibleProducts.map((product) => {
+              {accumulatedProducts.map((product) => {
                 const isWishlisted = wishlist.some(item => item.id === product.id);
-                const cartItem = items.find(item => item.product.id === product.id && !item.selectedVariantId);
+                const cartItem = cartItems.find(item => item.productId === product.id && !item.variantId);
                 const quantity = cartItem?.quantity || 0;
                 
-                // Calculate simulated discount
-                const hasDiscount = product.priceHistory && product.priceHistory[0] > product.price;
-                const discountPct = hasDiscount 
-                  ? Math.round(((product.priceHistory![0] - product.price) / product.priceHistory![0]) * 100)
+                const hasDiscount = product.discountPrice !== undefined;
+                const discountPct = hasDiscount
+                  ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
                   : 0;
 
                 return (
@@ -270,26 +333,19 @@ export const ProductListingPage: React.FC = () => {
                     whileHover="hover"
                     className="rounded-2xl border border-border-primary bg-bg-secondary p-3 flex flex-col justify-between shadow-subtle relative overflow-hidden group select-none"
                   >
-                    {/* Sponsored badge */}
-                    {product.isSponsored && (
-                      <span className="absolute top-3 left-3 text-[7px] font-extrabold px-1.5 py-0.5 rounded bg-bg-secondary/90 border border-border-primary/40 text-text-secondary tracking-widest uppercase z-10">
-                        SPONSORED
-                      </span>
-                    )}
-
                     {/* Wishlist Button */}
                     <button
-                      onClick={() => toggleWishlist(product)}
+                      onClick={() => toggleWishlistMutation.mutate(product)}
                       className="absolute top-3 right-3 p-1.5 rounded-full bg-bg-secondary/80 backdrop-blur-md border border-border-primary/40 text-text-secondary hover:text-status-error z-10 cursor-pointer"
                     >
                       <Heart className={cn("h-4 w-4 transition-transform active:scale-125", isWishlisted && "fill-status-error text-status-error")} />
                     </button>
 
-                    <div onClick={() => navigate(`/c/product/${product.sku}`)} className="cursor-pointer space-y-2.5 flex-1 flex flex-col justify-between">
+                    <div onClick={() => navigate(`/c/product/${product.id}`)} className="cursor-pointer space-y-2.5 flex-1 flex flex-col justify-between">
                       <div className="aspect-square w-full rounded-xl overflow-hidden bg-bg-tertiary relative">
                         <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                         {hasDiscount && (
-                          <span className="absolute bottom-2 left-2 text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-status-error text-white shadow-subtle font-heading tracking-wide">
+                          <span className="absolute bottom-2 left-2 text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-status-error text-white font-heading">
                             {discountPct}% OFF
                           </span>
                         )}
@@ -315,16 +371,18 @@ export const ProductListingPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-border-primary/60">
-                      <span className="text-sm font-extrabold text-text-primary font-heading">{formatCurrency(product.price)}</span>
+                      <span className="text-sm font-extrabold text-text-primary font-heading">
+                        {formatCurrency(product.discountPrice || product.price)}
+                      </span>
                       {product.stock > 0 ? (
                         quantity > 0 ? (
                           <div className="flex items-center gap-2 bg-brand-emerald text-white rounded-lg px-2 py-1 shadow-subtle">
-                            <button onClick={() => updateQuantity(product.id, quantity - 1)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-3 w-3" /></button>
+                            <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1 })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-3 w-3" /></button>
                             <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
-                            <button onClick={() => updateQuantity(product.id, quantity + 1)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-3 w-3" /></button>
+                            <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1 })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-3 w-3" /></button>
                           </div>
                         ) : (
-                          <button onClick={() => addItem(product)} className="px-3 py-1.5 rounded-lg border border-brand-emerald/40 hover:border-brand-emerald bg-bg-secondary text-brand-emerald hover:bg-brand-emerald/5 text-xs font-bold cursor-pointer">ADD</button>
+                          <button onClick={() => addToCart({ productId: product.id, quantity: 1 })} className="px-3 py-1.5 rounded-lg border border-brand-emerald/40 hover:border-brand-emerald bg-bg-secondary text-brand-emerald hover:bg-brand-emerald/5 text-xs font-bold cursor-pointer">ADD</button>
                         )
                       ) : (
                         <span className="text-[10px] font-bold text-text-secondary">LOCKED</span>
@@ -337,14 +395,14 @@ export const ProductListingPage: React.FC = () => {
           ) : (
             // LIST VIEW
             <div className="space-y-3">
-              {visibleProducts.map((product) => {
+              {accumulatedProducts.map((product) => {
                 const isWishlisted = wishlist.some(item => item.id === product.id);
-                const cartItem = items.find(item => item.product.id === product.id && !item.selectedVariantId);
+                const cartItem = cartItems.find(item => item.productId === product.id && !item.variantId);
                 const quantity = cartItem?.quantity || 0;
                 
-                const hasDiscount = product.priceHistory && product.priceHistory[0] > product.price;
-                const discountPct = hasDiscount 
-                  ? Math.round(((product.priceHistory![0] - product.price) / product.priceHistory![0]) * 100)
+                const hasDiscount = product.discountPrice !== undefined;
+                const discountPct = hasDiscount
+                  ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
                   : 0;
 
                 return (
@@ -355,7 +413,7 @@ export const ProductListingPage: React.FC = () => {
                     whileHover="hover"
                     className="rounded-2xl border border-border-primary bg-bg-secondary p-4 flex gap-4 shadow-subtle relative overflow-hidden select-none"
                   >
-                    <div onClick={() => navigate(`/c/product/${product.sku}`)} className="h-24 w-24 rounded-xl overflow-hidden bg-bg-tertiary relative cursor-pointer flex-shrink-0">
+                    <div onClick={() => navigate(`/c/product/${product.id}`)} className="h-24 w-24 rounded-xl overflow-hidden bg-bg-tertiary relative cursor-pointer flex-shrink-0">
                       <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
                       {hasDiscount && (
                         <span className="absolute bottom-1.5 left-1.5 text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-status-error text-white font-heading">
@@ -365,13 +423,8 @@ export const ProductListingPage: React.FC = () => {
                     </div>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
-                      <div onClick={() => navigate(`/c/product/${product.sku}`)} className="cursor-pointer">
+                      <div onClick={() => navigate(`/c/product/${product.id}`)} className="cursor-pointer">
                         <div className="flex items-center gap-1.5">
-                          {product.isSponsored && (
-                            <span className="text-[7px] font-extrabold px-1.5 py-0.5 rounded bg-bg-secondary border border-border-primary text-text-secondary tracking-widest uppercase">
-                              SPONSORED
-                            </span>
-                          )}
                           <span className="text-[9px] text-brand-emerald font-extrabold flex items-center gap-0.5">
                             <Clock className="h-2.5 w-2.5" />
                             10 mins delivery
@@ -385,16 +438,18 @@ export const ProductListingPage: React.FC = () => {
                       </div>
 
                       <div className="flex items-center justify-between mt-3 pt-3 border-t border-border-primary/60">
-                        <span className="text-sm font-extrabold text-text-primary font-heading">{formatCurrency(product.price)}</span>
+                        <span className="text-sm font-extrabold text-text-primary font-heading">
+                          {formatCurrency(product.discountPrice || product.price)}
+                        </span>
                         {product.stock > 0 ? (
                           quantity > 0 ? (
                             <div className="flex items-center gap-2 bg-brand-emerald text-white rounded-lg px-2.5 py-1 shadow-subtle">
-                              <button onClick={() => updateQuantity(product.id, quantity - 1)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-3 w-3" /></button>
+                              <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1 })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-3 w-3" /></button>
                               <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
-                              <button onClick={() => updateQuantity(product.id, quantity + 1)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-3 w-3" /></button>
+                              <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1 })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-3 w-3" /></button>
                             </div>
                           ) : (
-                            <button onClick={() => addItem(product)} className="px-4 py-1.5 rounded-lg border border-brand-emerald/40 hover:border-brand-emerald bg-bg-secondary text-brand-emerald hover:bg-brand-emerald/5 text-xs font-bold cursor-pointer">ADD</button>
+                            <button onClick={() => addToCart({ productId: product.id, quantity: 1 })} className="px-4 py-1.5 rounded-lg border border-brand-emerald/40 hover:border-brand-emerald bg-bg-secondary text-brand-emerald hover:bg-brand-emerald/5 text-xs font-bold cursor-pointer">ADD</button>
                           )
                         ) : (
                           <span className="text-[10px] font-bold text-text-secondary uppercase">Out of Stock</span>
@@ -403,7 +458,7 @@ export const ProductListingPage: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => toggleWishlist(product)}
+                      onClick={() => toggleWishlistMutation.mutate(product)}
                       className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-bg-tertiary text-text-secondary hover:text-status-error cursor-pointer"
                     >
                       <Heart className={cn("h-4 w-4", isWishlisted && "fill-status-error text-status-error")} />

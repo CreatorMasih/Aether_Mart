@@ -253,14 +253,17 @@ model Merchant {
   gstNumber    String?
   panNumber    String?
   fssaiNumber  String?
+  bankAccount  String?
+  bankName     String?
   isApproved   Boolean  @default(false)
   deletedAt    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   // Relations
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  store Store?
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store   Store?
+  payouts Payout[]
 
   @@map("merchants")
 }
@@ -272,6 +275,13 @@ model Rider {
   vehicleType        VehicleType
   vehiclePlateNumber String?
   licenseNumber      String?
+  rcNumber           String?
+  isRcUploaded       Boolean      @default(true)
+  isInsuranceUploaded Boolean     @default(true)
+  isLicenseUploaded   Boolean     @default(true)
+  balance            Float        @default(0.0)
+  bankAccount        String?
+  bankName           String?
   isOnline           Boolean      @default(false)
   isApproved         Boolean      @default(false)
   currentLatitude    Float?
@@ -283,6 +293,7 @@ model Rider {
   // Relations
   user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignments DeliveryAssignment[]
+  payouts     Payout[]
   locationHistories RiderLocationHistory[]
 
   @@index([isOnline])
@@ -339,6 +350,8 @@ model Store {
   isOpen           Boolean  @default(true)
   commissionRate   Float    @default(0.10)
   deliveryRadiusKm Float    @default(5.0)
+  minimumOrderValue Float   @default(0.0)
+  deliveryFee      Float    @default(0.0)
   openingTime      String   @default("09:00")
   closingTime      String   @default("22:00")
   isHoliday        Boolean  @default(false)
@@ -545,6 +558,7 @@ model Order {
   handlingFee           Float
   discount              Float         @default(0.0)
   totalAmount           Float
+  driverTip             Float         @default(0.0)
   couponId              String?
   deliveryInstruction   String?
   estimatedDeliveryTime DateTime?
@@ -620,6 +634,24 @@ model Transaction {
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
   @@map("transactions")
+}
+
+model Payout {
+  id         String   @id @default(uuid())
+  merchantId String?
+  riderId    String?
+  amount     Float
+  status     String   @default("SUCCESS") // SUCCESS, PENDING, FAILED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  merchant   Merchant? @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  rider      Rider?    @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([riderId])
+  @@map("payouts")
 }
 
 // ─── DELIVERY MODELS ──────────────────────────────────────────────────────────

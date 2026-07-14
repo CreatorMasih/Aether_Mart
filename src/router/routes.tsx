@@ -1,15 +1,28 @@
 import React, { lazy, Suspense } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import { USER_ROLES } from '../core/config/constants';
 import { useAuthStore } from '../features/auth/store/auth-store';
+import { ModalContainer } from '../components/ui/modal-manager/ModalContainer';
+import { DrawerContainer } from '../components/ui/drawer-manager/DrawerContainer';
 
 // Layout shells
 import CustomerLayout from '../components/layout/CustomerLayout';
 import MerchantLayout from '../components/layout/MerchantLayout';
 import RiderLayout from '../components/layout/RiderLayout';
 import AdminLayout from '../components/layout/AdminLayout';
+
+// Root layout that exposes the react-router context to overlays
+const RootLayout: React.FC = () => {
+  return (
+    <>
+      <Outlet />
+      <ModalContainer />
+      <DrawerContainer />
+    </>
+  );
+};
 
 // Lazy loaded page components
 const OnboardingScreen = lazy(() => import('../features/auth/components/OnboardingScreen'));
@@ -73,135 +86,140 @@ const RoleResolver: React.FC = () => {
 
 export const routes: RouteObject[] = [
   {
-    path: '/',
-    element: <RoleResolver />,
-  },
-  {
-    path: '/welcome',
-    element: withSuspense(OnboardingScreen),
-  },
-  {
-    path: '/auth',
-    element: withSuspense(AuthScreen),
-  },
-  {
-    path: '/auth/profile-setup',
-    element: withSuspense(ProfileSetupScreen),
-  },
-  
-  // Customer Protected Routes
-  {
-    path: '/c',
-    element: (
-      <ProtectedRoute allowedRoles={[USER_ROLES.CUSTOMER]}>
-        <CustomerLayout />
-      </ProtectedRoute>
-    ),
+    element: <RootLayout />,
     children: [
-      { path: '', element: <Navigate to="home" replace /> },
       {
-        path: 'home',
-        element: withSuspense(HomeScreen),
+        path: '/',
+        element: <RoleResolver />,
       },
       {
-        path: 'search',
-        element: withSuspense(ProductListingPage),
+        path: '/welcome',
+        element: withSuspense(OnboardingScreen),
       },
       {
-        path: 'category/:slug',
-        element: withSuspense(ProductListingPage),
+        path: '/auth',
+        element: withSuspense(AuthScreen),
       },
       {
-        path: 'product/:slug',
-        element: withSuspense(ProductDetailPage),
+        path: '/auth/profile-setup',
+        element: withSuspense(ProfileSetupScreen),
+      },
+      
+      // Customer Protected Routes
+      {
+        path: '/c',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.CUSTOMER]}>
+            <CustomerLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { path: '', element: <Navigate to="home" replace /> },
+          {
+            path: 'home',
+            element: withSuspense(HomeScreen),
+          },
+          {
+            path: 'search',
+            element: withSuspense(ProductListingPage),
+          },
+          {
+            path: 'category/:slug',
+            element: withSuspense(ProductListingPage),
+          },
+          {
+            path: 'product/:slug',
+            element: withSuspense(ProductDetailPage),
+          },
+          {
+            path: 'checkout',
+            element: withSuspense(CheckoutPage),
+          },
+          {
+            path: 'orders/confirm',
+            element: withSuspense(OrderConfirmationPage),
+          },
+          {
+            path: 'orders/track/:id',
+            element: withSuspense(LiveOrderTrackingPage),
+          },
+          {
+            path: 'profile/insights',
+            element: withSuspense(CustomerDashboardPage),
+          },
+        ],
+      },
+      
+      // Merchant Protected Routes
+      {
+        path: '/m',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.SHOPKEEPER]}>
+            <MerchantLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { path: '', element: <Navigate to="dashboard" replace /> },
+          {
+            path: 'dashboard',
+            element: withSuspense(MerchantDashboard),
+          },
+          {
+            path: 'orders',
+            element: withSuspense(MerchantOrders),
+          },
+          {
+            path: 'catalog',
+            element: withSuspense(MerchantCatalog),
+          },
+        ],
+      },
+      
+      // Rider Protected Routes
+      {
+        path: '/r',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.RIDER]}>
+            <RiderLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { path: '', element: <Navigate to="dashboard" replace /> },
+          {
+            path: 'dashboard',
+            element: withSuspense(RiderDashboard),
+          },
+          {
+            path: 'active',
+            element: withSuspense(RiderJobActive),
+          },
+        ],
+      },
+      
+      // Admin Protected Routes
+      {
+        path: '/a',
+        element: (
+          <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+            <AdminLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { path: '', element: <Navigate to="dashboard" replace /> },
+          {
+            path: 'dashboard',
+            element: withSuspense(AdminDashboard),
+          },
+          {
+            path: 'users',
+            element: withSuspense(AdminUsers),
+          },
+        ],
       },
       {
-        path: 'checkout',
-        element: withSuspense(CheckoutPage),
+        path: '*',
+        element: <Navigate to="/" replace />,
       },
-      {
-        path: 'orders/confirm',
-        element: withSuspense(OrderConfirmationPage),
-      },
-      {
-        path: 'orders/track/:id',
-        element: withSuspense(LiveOrderTrackingPage),
-      },
-      {
-        path: 'profile/insights',
-        element: withSuspense(CustomerDashboardPage),
-      },
-    ],
-  },
-  
-  // Merchant Protected Routes
-  {
-    path: '/m',
-    element: (
-      <ProtectedRoute allowedRoles={[USER_ROLES.SHOPKEEPER]}>
-        <MerchantLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { path: '', element: <Navigate to="dashboard" replace /> },
-      {
-        path: 'dashboard',
-        element: withSuspense(MerchantDashboard),
-      },
-      {
-        path: 'orders',
-        element: withSuspense(MerchantOrders),
-      },
-      {
-        path: 'catalog',
-        element: withSuspense(MerchantCatalog),
-      },
-    ],
-  },
-  
-  // Rider Protected Routes
-  {
-    path: '/r',
-    element: (
-      <ProtectedRoute allowedRoles={[USER_ROLES.RIDER]}>
-        <RiderLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { path: '', element: <Navigate to="dashboard" replace /> },
-      {
-        path: 'dashboard',
-        element: withSuspense(RiderDashboard),
-      },
-      {
-        path: 'active',
-        element: withSuspense(RiderJobActive),
-      },
-    ],
-  },
-  
-  // Admin Protected Routes
-  {
-    path: '/a',
-    element: (
-      <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
-        <AdminLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { path: '', element: <Navigate to="dashboard" replace /> },
-      {
-        path: 'dashboard',
-        element: withSuspense(AdminDashboard),
-      },
-      {
-        path: 'users',
-        element: withSuspense(AdminUsers),
-      },
-    ],
-  },
-  {
-    path: '*',
-    element: <Navigate to="/" replace />,
-  },
+    ]
+  }
 ];

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
   MapPin, 
-  User, 
+  User as UserIcon, 
   CheckSquare, 
   Square, 
   Check, 
@@ -11,24 +11,80 @@ import {
   AlertTriangle,
   Clock
 } from 'lucide-react';
-import { useMerchantStore } from '../store/merchant-store';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../../core/network/queryKeys';
+import { merchantService } from '../services/merchant-service';
+import { socketService } from '../../../core/socket/socket-service';
+import { useToast } from '../../../hooks/useToast';
 import { formatCurrency } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 
 type OrderStatusFilter = 'NEW' | 'PREPARING' | 'PACKING' | 'READY' | 'COMPLETED' | 'CANCELLED';
 
 export const MerchantOrders: React.FC = () => {
-  const { 
-    orders, 
-    acceptOrder, 
-    markOrderPacking, 
-    toggleCheckItem, 
-    markOrderReady, 
-    cancelOrder 
-  } = useMerchantStore();
-
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<OrderStatusFilter>('NEW');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Local Packing Checklist state
+  const [checkedItems, setCheckedItems] = useState<string[]>([]);
+
+  // 1. Fetch live storefront orders
+  const { data: storeOrders, isLoading: ordersLoading } = useQuery({
+    queryKey: queryKeys.merchantOrders(),
+    queryFn: () => merchantService.getStoreOrders(),
+  });
+
+  const orders = storeOrders ?? [];
+
+  // 2. Real-time Sockets Listeners
+  useEffect(() => {
+    const handleNewOrder = (order: any) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantOrders() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+      showToast({
+        type: 'info',
+        title: 'New Order Received',
+        description: `Order ${order.orderNumber} is pending review.`,
+      });
+    };
+
+    const handleStatusUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantOrders() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+    };
+
+    socketService.on('merchant:new_order', handleNewOrder);
+    socketService.on('order:status_update', handleStatusUpdate);
+
+    return () => {
+      socketService.off('merchant:new_order', handleNewOrder);
+      socketService.off('order:status_update', handleStatusUpdate);
+    };
+  }, [queryClient, showToast]);
+
+  // 3. Status Transition Mutations
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      merchantService.updateOrderStatus(id, status),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantOrders() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+      showToast({
+        type: 'success',
+        title: 'Order Updated',
+        description: `Order successfully transitioned to ${data.status}.`,
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        type: 'error',
+        title: 'Transition Failed',
+        description: err.message || 'Unable to update order status.',
+      });
+    }
+  });
 
   // Filtered orders list depending on tab selection
   const filteredOrders = orders.filter((o) => {
@@ -42,9 +98,30 @@ export const MerchantOrders: React.FC = () => {
 
   const activeOrder = orders.find((o) => o.id === selectedOrderId) || filteredOrders[0] || null;
 
+  // Initialize/reset checklists when active order switches
+  useEffect(() => {
+    if (activeOrder) {
+      setCheckedItems([]);
+    }
+  }, [activeOrder]);
+
   const handlePrintReceipt = (id: string) => {
     alert(`Routing receipt package to print queue for order ${id}.`);
   };
+
+  const toggleCheckItemLocal = (productId: string) => {
+    setCheckedItems((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
+  };
+
+  if (ordersLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-xs font-semibold text-text-secondary select-none">
+        Loading storefront orders history...
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-12 text-xs font-semibold text-text-secondary select-none">
@@ -104,7 +181,7 @@ export const MerchantOrders: React.FC = () => {
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-text-primary">{o.id}</span>
+                    <span className="font-bold text-text-primary">{o.orderNumber}</span>
                     <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider">
                       {o.createdAt}
                     </span>
@@ -136,7 +213,7 @@ export const MerchantOrders: React.FC = () => {
             <div className="flex justify-between items-start border-b border-border-primary/60 pb-3">
               <div>
                 <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Active order card</span>
-                <h3 className="text-sm font-extrabold text-text-primary mt-0.5">{activeOrder.id}</h3>
+                <h3 className="text-sm font-extrabold text-text-primary mt-0.5">{activeOrder.orderNumber}</h3>
               </div>
               <button
                 onClick={() => handlePrintReceipt(activeOrder.id)}
@@ -153,7 +230,7 @@ export const MerchantOrders: React.FC = () => {
               
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-xs">
-                  <User className="h-4 w-4 text-text-secondary" />
+                  <UserIcon className="h-4 w-4 text-text-secondary" />
                   <span className="font-bold text-text-primary">{activeOrder.deliveryAddress.receiverName}</span>
                 </div>
                 <div className="flex items-start gap-2 text-xs">
@@ -171,13 +248,13 @@ export const MerchantOrders: React.FC = () => {
               
               <div className="space-y-2">
                 {activeOrder.items.map((item) => {
-                  const isChecked = activeOrder.packingCheckedItems?.includes(item.productId);
+                  const isChecked = checkedItems.includes(item.productId);
                   const isPackingMode = activeOrder.status === 'PACKING';
 
                   return (
                     <div 
                       key={item.productId} 
-                      onClick={() => isPackingMode && toggleCheckItem(activeOrder.id, item.productId)}
+                      onClick={() => isPackingMode && toggleCheckItemLocal(item.productId)}
                       className={cn(
                         "p-3 rounded-xl border border-border-primary flex items-center justify-between transition-colors",
                         isChecked ? "bg-brand-emerald/5 border-brand-emerald/20" : "bg-bg-tertiary/40",
@@ -212,7 +289,8 @@ export const MerchantOrders: React.FC = () => {
             <div className="pt-4 border-t border-border-primary/60 space-y-2">
               {activeOrder.status === 'PLACED' && (
                 <button
-                  onClick={() => acceptOrder(activeOrder.id)}
+                  onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'CONFIRMED' })}
+                  disabled={updateStatusMutation.isPending}
                   className="w-full py-3 bg-brand-emerald hover:bg-brand-emerald-hover text-white font-bold text-xs rounded-xl shadow-subtle cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Check className="h-4 w-4" /> Accept Order
@@ -221,7 +299,8 @@ export const MerchantOrders: React.FC = () => {
 
               {activeOrder.status === 'CONFIRMED' && (
                 <button
-                  onClick={() => markOrderPacking(activeOrder.id)}
+                  onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'PACKING' })}
+                  disabled={updateStatusMutation.isPending}
                   className="w-full py-3 bg-brand-violet hover:bg-brand-violet-hover text-white font-bold text-xs rounded-xl shadow-subtle cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <ShoppingBag className="h-4 w-4" /> Start Packing Checklist
@@ -230,8 +309,8 @@ export const MerchantOrders: React.FC = () => {
 
               {activeOrder.status === 'PACKING' && (
                 <button
-                  onClick={() => markOrderReady(activeOrder.id)}
-                  disabled={(activeOrder.packingCheckedItems?.length || 0) < activeOrder.items.length}
+                  onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'READY_FOR_PICKUP' })}
+                  disabled={updateStatusMutation.isPending || checkedItems.length < activeOrder.items.length}
                   className="w-full py-3 bg-brand-emerald hover:bg-brand-emerald-hover text-white font-bold text-xs rounded-xl shadow-subtle cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Check className="h-4 w-4" /> Finish Packing & Ready for Pickup
@@ -248,7 +327,8 @@ export const MerchantOrders: React.FC = () => {
               {/* Cancel order line */}
               {activeOrder.status !== 'DELIVERED' && activeOrder.status !== 'CANCELLED' && (
                 <button
-                  onClick={() => cancelOrder(activeOrder.id, 'Merchant out of stock')}
+                  onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'CANCELLED' })}
+                  disabled={updateStatusMutation.isPending}
                   className="w-full py-3 border border-status-error/30 hover:bg-status-error/5 text-status-error font-bold text-xs rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5"
                 >
                   <AlertTriangle className="h-4 w-4" /> Cancel Order

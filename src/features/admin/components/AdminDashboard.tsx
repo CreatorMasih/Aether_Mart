@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   TrendingUp, 
   ShoppingBag, 
@@ -6,30 +7,123 @@ import {
   ShieldCheck, 
   Activity, 
   AlertTriangle,
-  Sliders
+  Sliders,
+  Play
 } from 'lucide-react';
-import { useAdminStore } from '../store/admin-store';
+import { queryKeys } from '../../../core/network/queryKeys';
+import { adminService } from '../services/admin-service';
 import { formatCurrency } from '../../../utils/formatters';
 
 export const AdminDashboard: React.FC = () => {
-  const { metrics, settings, auditLogs, updateSettings, toggleFeatureFlag } = useAdminStore();
-  
-  // Settings edit states
-  const [platformFee, setPlatformFee] = useState(settings.generalPlatformFee);
-  const [kmCharge, setKmCharge] = useState(settings.deliveryChargePerKm);
-  const [commRate, setCommRate] = useState(settings.commissionPercentage);
-  const [maintMode, setMaintMode] = useState(settings.maintenanceMode);
+  const queryClient = useQueryClient();
+
+  // Queries
+  const { data: kpis, isLoading: isKpisLoading } = useQuery({
+    queryKey: queryKeys.adminKPIs(),
+    queryFn: () => adminService.getKPIs()
+  });
+
+  const { data: funnel, isLoading: isFunnelLoading } = useQuery({
+    queryKey: queryKeys.adminOrderFunnel(),
+    queryFn: () => adminService.getOrderFunnel()
+  });
+
+  const { data: cancellations, isLoading: isCancellationsLoading } = useQuery({
+    queryKey: queryKeys.adminCancellationAnalytics(),
+    queryFn: () => adminService.getCancellationAnalytics()
+  });
+
+  const { data: settingsList, isLoading: isSettingsLoading } = useQuery({
+    queryKey: queryKeys.adminSettings(),
+    queryFn: () => adminService.getSettings()
+  });
+
+  const { data: auditLogsRes } = useQuery({
+    queryKey: queryKeys.adminAuditLogs(1),
+    queryFn: () => adminService.getAuditLogs({ page: 1, limit: 10 })
+  });
+
+  const { data: categoryData } = useQuery({
+    queryKey: queryKeys.adminCategoryAnalytics(),
+    queryFn: () => adminService.getCategoryAnalytics()
+  });
+
+  // Local state for configuration inputs
+  const [platformFee, setPlatformFee] = useState(5);
+  const [kmCharge, setKmCharge] = useState(15);
+  const [commRate, setCommRate] = useState(10);
+  const [maintMode, setMaintMode] = useState(false);
+
+  useEffect(() => {
+    if (settingsList) {
+      const getVal = (key: string, def: number | boolean) => {
+        const item = settingsList.find(s => s.key === key);
+        if (!item) return def;
+        if (typeof def === 'boolean') return item.value === 'true';
+        return parseFloat(item.value) || def;
+      };
+      setPlatformFee(getVal('generalPlatformFee', 5) as number);
+      setKmCharge(getVal('deliveryChargePerKm', 15) as number);
+      setCommRate(getVal('commissionPercentage', 10) as number);
+      setMaintMode(getVal('maintenanceMode', false) as boolean);
+    }
+  }, [settingsList]);
+
+  // Mutations
+  const updateSettingsMutation = useMutation({
+    mutationFn: (settings: Array<{ key: string; value: string }>) => adminService.bulkUpdateSettings(settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminAuditLogs(1) });
+      alert('Platform configurations updated successfully.');
+    }
+  });
+
+  const triggerJobsMutation = useMutation({
+    mutationFn: () => adminService.triggerJobs(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminAuditLogs(1) });
+      alert('Background maintenance jobs executed successfully.');
+    }
+  });
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings({
-      generalPlatformFee: platformFee,
-      deliveryChargePerKm: kmCharge,
-      commissionPercentage: commRate,
-      maintenanceMode: maintMode
-    });
-    alert('Global platform parameters updated successfully.');
+    updateSettingsMutation.mutate([
+      { key: 'generalPlatformFee', value: String(platformFee) },
+      { key: 'deliveryChargePerKm', value: String(kmCharge) },
+      { key: 'commissionPercentage', value: String(commRate) },
+      { key: 'maintenanceMode', value: String(maintMode) }
+    ]);
   };
+
+  const geoRouting = settingsList ? settingsList.find(s => s.key === 'geoRoutingEnabled')?.value === 'true' : true;
+  const dynamicPricing = settingsList ? settingsList.find(s => s.key === 'dynamicPricingEnabled')?.value === 'true' : false;
+
+  const handleToggleFeature = (key: string, currentVal: boolean) => {
+    updateSettingsMutation.mutate([
+      { key, value: String(!currentVal) }
+    ]);
+  };
+
+  const handleTriggerJobs = () => {
+    if (confirm('Trigger all background platform cleanup and maintenance tasks?')) {
+      triggerJobsMutation.mutate();
+    }
+  };
+
+  const isLoading = isKpisLoading || isFunnelLoading || isCancellationsLoading || isSettingsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center p-6">
+        <div className="h-6 w-6 rounded-full border-2 border-brand-emerald border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  // Calculate completed orders from funnel data
+  const completedOrdersCount = funnel?.DELIVERED || 0;
 
   return (
     <div className="space-y-6 pb-12 text-xs font-semibold text-text-secondary select-none">
@@ -45,11 +139,11 @@ export const AdminDashboard: React.FC = () => {
           </span>
           <div className="mt-1">
             <span className="text-xl font-extrabold text-text-primary font-heading">
-              {formatCurrency(metrics.totalRevenue)}
+              {formatCurrency(kpis?.gmv || 0)}
             </span>
             <p className="text-[9px] text-brand-emerald font-bold mt-0.5 uppercase tracking-wider flex items-center gap-0.5">
               <TrendingUp className="h-3 w-3" />
-              +22% this month
+              Live Database Feed
             </p>
           </div>
         </div>
@@ -62,26 +156,26 @@ export const AdminDashboard: React.FC = () => {
           </span>
           <div className="mt-1">
             <span className="text-xl font-extrabold text-text-primary font-heading">
-              {metrics.completedOrders}
+              {completedOrdersCount}
             </span>
             <p className="text-[9px] text-text-secondary font-bold mt-0.5 uppercase tracking-wider">
-              {metrics.activeOrders} active deliveries
+              {kpis?.activeOrders || 0} active deliveries
             </p>
           </div>
         </div>
 
-        {/* Today's Sales */}
+        {/* Today's Sales / Commission Revenue */}
         <div className="p-4 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-28 shadow-subtle">
           <span className="text-[9px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
             <Activity className="h-4.5 w-4.5 text-brand-emerald" />
-            Today's Bookings
+            Platform Earnings
           </span>
           <div className="mt-1">
             <span className="text-xl font-extrabold text-text-primary font-heading">
-              {formatCurrency(metrics.todayRevenue)}
+              {formatCurrency(kpis?.revenue || 0)}
             </span>
             <p className="text-[9px] text-text-secondary font-bold mt-0.5 uppercase tracking-wider">
-              Avg basket size: ₹245
+              Active users: {kpis?.activeUsers || 0}
             </p>
           </div>
         </div>
@@ -94,10 +188,10 @@ export const AdminDashboard: React.FC = () => {
           </span>
           <div className="mt-1">
             <span className="text-xl font-extrabold text-status-error font-heading">
-              {((metrics.cancelledOrders / metrics.totalOrders) * 100).toFixed(1)}%
+              {cancellations?.cancellationRate?.toFixed(1) || 0}%
             </span>
             <p className="text-[9px] text-text-secondary font-bold mt-0.5 uppercase tracking-wider">
-              {metrics.cancelledOrders} total incidents
+              {cancellations?.cancelledOrders || 0} total incidents
             </p>
           </div>
         </div>
@@ -107,30 +201,30 @@ export const AdminDashboard: React.FC = () => {
       {/* 2. Revenue chart & Live Activity feed side-by-side */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left: Interactive sales curves */}
+        {/* Left: Dynamic category analytics sales */}
         <div className="lg:col-span-2 p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
           <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary/60 pb-2">
-            Weekly Booking Curves
+            Category Sales Performance
           </h3>
           
           <div className="relative h-48 w-full flex items-end justify-between px-6 pt-6 border-b border-border-primary">
-            {[
-              { label: 'Mon', val: 40 },
-              { label: 'Tue', val: 55 },
-              { label: 'Wed', val: 48 },
-              { label: 'Thu', val: 75 },
-              { label: 'Fri', val: 90 },
-              { label: 'Sat', val: 110 },
-              { label: 'Sun', val: 95 }
-            ].map((bar, idx) => (
-              <div key={idx} className="flex flex-col items-center flex-1 space-y-2">
-                <div className="relative w-8 rounded-t bg-brand-emerald/10 hover:bg-brand-emerald/20 transition-all flex items-end justify-center" style={{ height: `${bar.val * 0.4}%` }}>
-                  <span className="absolute -top-6 text-[9px] font-extrabold text-brand-emerald">₹{bar.val * 100}</span>
-                  <div className="w-full h-2 rounded-t bg-brand-emerald" />
-                </div>
-                <span className="text-[8px] text-text-secondary font-bold uppercase tracking-wider">{bar.label}</span>
-              </div>
-            ))}
+            {categoryData && categoryData.length > 0 ? (
+              categoryData.map((cat: any, idx: number) => {
+                const maxGmv = Math.max(...categoryData.map((c: any) => c.gmv || 1));
+                const heightPercentage = ((cat.gmv || 0) / maxGmv) * 80; // scale to max 80%
+                return (
+                  <div key={idx} className="flex flex-col items-center flex-1 space-y-2">
+                    <div className="relative w-8 rounded-t bg-brand-emerald/10 hover:bg-brand-emerald/20 transition-all flex items-end justify-center" style={{ height: `${Math.max(10, heightPercentage)}%` }}>
+                      <span className="absolute -top-6 text-[9px] font-extrabold text-brand-emerald">{formatCurrency(cat.gmv)}</span>
+                      <div className="w-full h-2 rounded-t bg-brand-emerald" />
+                    </div>
+                    <span className="text-[8px] text-text-secondary font-bold uppercase tracking-wider truncate max-w-[60px]">{cat.name}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="w-full text-center py-12 text-text-secondary">No category analytics recorded.</div>
+            )}
           </div>
         </div>
 
@@ -138,21 +232,24 @@ export const AdminDashboard: React.FC = () => {
         <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
           <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary/60 pb-2 flex items-center gap-1.5">
             <Activity className="h-4.5 w-4.5 text-brand-emerald" />
-            Live Dispatch Feed
+            Live Platform Audit Ticker
           </h3>
 
           <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-            {[
-              { id: '1', time: '1 min ago', desc: 'Ramesh Kumar checked out ORD-998231' },
-              { id: '2', time: '3 mins ago', desc: 'Karthik Raja accepted delivery JOB-5011' },
-              { id: '3', time: '8 mins ago', desc: 'Apollo Pharma packed order ORD-761234' },
-              { id: '4', time: '12 mins ago', desc: 'Rider assigned to customer Sneha Patel' }
-            ].map((act) => (
-              <div key={act.id} className="p-3 bg-bg-tertiary/40 border border-border-primary/60 rounded-xl flex justify-between items-start gap-2">
-                <p className="font-bold text-text-primary text-[10px] leading-relaxed">{act.desc}</p>
-                <span className="text-[8px] text-text-secondary whitespace-nowrap">{act.time}</span>
-              </div>
-            ))}
+            {auditLogsRes && auditLogsRes.logs && auditLogsRes.logs.length > 0 ? (
+              auditLogsRes.logs.map((log: any) => (
+                <div key={log.id} className="p-3 bg-bg-tertiary/40 border border-border-primary/60 rounded-xl flex justify-between items-start gap-2">
+                  <p className="font-bold text-text-primary text-[10px] leading-relaxed">
+                    {log.action} ({log.targetType})
+                  </p>
+                  <span className="text-[8px] text-text-secondary whitespace-nowrap">
+                    {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="p-3 text-center text-text-secondary">No audit logs recorded yet.</div>
+            )}
           </div>
         </div>
 
@@ -163,9 +260,18 @@ export const AdminDashboard: React.FC = () => {
         
         {/* Left: General configuration rules */}
         <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4 shadow-subtle">
-          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary/60 pb-2 flex items-center gap-1.5">
-            <Sliders className="h-4.5 w-4.5 text-text-secondary" />
-            Platform Configurations
+          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary/60 pb-2 flex items-center gap-1.5 justify-between">
+            <span className="flex items-center gap-1.5">
+              <Sliders className="h-4.5 w-4.5 text-text-secondary" />
+              Platform Configurations
+            </span>
+            <button
+              onClick={handleTriggerJobs}
+              className="py-1 px-3 bg-brand-violet hover:bg-brand-violet/90 text-white rounded-lg text-[9px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-subtle"
+            >
+              <Play className="h-3 w-3" />
+              Run Cleanup Jobs
+            </button>
           </h3>
 
           <form onSubmit={handleSaveSettings} className="space-y-4">
@@ -212,8 +318,8 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <input 
                   type="checkbox" 
-                  checked={settings.geoRoutingEnabled}
-                  onChange={() => toggleFeatureFlag('geoRoutingEnabled')}
+                  checked={geoRouting}
+                  onChange={() => handleToggleFeature('geoRoutingEnabled', geoRouting)}
                   className="h-4.5 w-4.5 accent-brand-emerald cursor-pointer"
                 />
               </div>
@@ -225,8 +331,8 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <input 
                   type="checkbox" 
-                  checked={settings.dynamicPricingEnabled}
-                  onChange={() => toggleFeatureFlag('dynamicPricingEnabled')}
+                  checked={dynamicPricing}
+                  onChange={() => handleToggleFeature('dynamicPricingEnabled', dynamicPricing)}
                   className="h-4.5 w-4.5 accent-brand-emerald cursor-pointer"
                 />
               </div>
@@ -248,7 +354,8 @@ export const AdminDashboard: React.FC = () => {
 
             <button
               type="submit"
-              className="py-2.5 px-6 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-xl font-bold cursor-pointer transition-all"
+              disabled={updateSettingsMutation.isPending}
+              className="py-2.5 px-6 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-xl font-bold cursor-pointer transition-all disabled:opacity-50"
             >
               Save Configuration
             </button>
@@ -262,18 +369,24 @@ export const AdminDashboard: React.FC = () => {
             Audit Ledger Logs
           </h3>
 
-          <div className="divide-y divide-border-primary border border-border-primary rounded-xl overflow-hidden bg-bg-tertiary/40">
-            {auditLogs.map((log) => (
-              <div key={log.id} className="p-3.5 flex justify-between items-center text-xs">
-                <div>
-                  <span className="font-bold text-text-primary">{log.action}</span>
-                  <span className="text-[8px] text-text-secondary block font-semibold mt-0.5">{log.timestamp}</span>
+          <div className="divide-y divide-border-primary border border-border-primary rounded-xl overflow-hidden bg-bg-tertiary/40 max-h-72 overflow-y-auto">
+            {auditLogsRes && auditLogsRes.logs && auditLogsRes.logs.length > 0 ? (
+              auditLogsRes.logs.map((log: any) => (
+                <div key={log.id} className="p-3.5 flex justify-between items-center text-xs">
+                  <div>
+                    <span className="font-bold text-text-primary block">{log.action}</span>
+                    <span className="text-[8px] text-text-secondary block font-semibold mt-0.5">
+                      Target: {log.targetType} ({log.targetId || 'N/A'}) • {new Date(log.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <span className="text-[8px] font-extrabold text-brand-emerald uppercase whitespace-nowrap bg-brand-emerald/5 px-2 py-0.5 border border-brand-emerald/10 rounded">
+                    {log.user?.email || 'System'}
+                  </span>
                 </div>
-                <span className="text-[8px] font-extrabold text-brand-emerald uppercase whitespace-nowrap bg-brand-emerald/5 px-2 py-0.5 border border-brand-emerald/10 rounded">
-                  {log.adminUser}
-                </span>
-              </div>
-            ))}
+              ))
+            ) : (
+              <div className="p-4 text-center text-text-secondary">No audit ledger logs found.</div>
+            )}
           </div>
         </div>
 

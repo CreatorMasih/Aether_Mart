@@ -12,6 +12,10 @@ router.use(authenticate);
 router.put('/profile', requireMerchant, merchantController.updateProfile);
 router.delete('/profile/:id', requireMerchantOrAdmin, merchantController.softDeleteMerchant);
 
+// Dashboard & Analytics
+router.get('/dashboard', requireMerchant, merchantController.getDashboardStats);
+router.get('/payouts', requireMerchant, merchantController.getPayouts);
+
 // Products CRUD
 router.post('/products', requireMerchant, merchantController.createProduct);
 router.put('/products/:id', requireMerchant, merchantController.updateProduct);

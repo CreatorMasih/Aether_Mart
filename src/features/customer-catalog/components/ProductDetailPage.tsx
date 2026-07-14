@@ -16,30 +16,72 @@ import {
   Plus,
   Minus
 } from 'lucide-react';
-import { MOCK_PRODUCTS } from '../services/mock-catalog-data';
-import type { ProductVariant } from '../services/mock-catalog-data';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
-import { useCartStore } from '../../customer-checkout/store/cart-store';
+import { useCartMutations } from '../../customer-checkout/hooks/useCartMutations';
+import { queryKeys } from '../../../core/network/queryKeys';
 import { useToast } from '../../../hooks/useToast';
+import { catalogService } from '../services/catalog-service';
 import { formatCurrency, formatWeight } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 import { pageTransition } from '../../../core/theme/animations';
+import { ProductCardGrid } from './ProductCardGrid';
+import type { CatalogProduct } from '../services/catalog-mappers';
 
 export const ProductDetailPage: React.FC = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug } = useParams<{ slug: string }>(); // slug maps to product id
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { wishlist, toggleWishlist, addRecentlyViewed } = useCustomerStore();
-  const { items, addItem, updateQuantity } = useCartStore();
+  const { addRecentlyViewed, toggleWishlist: storeToggleWishlist } = useCustomerStore();
+  const { addToCart, updateQuantity } = useCartMutations();
 
-  // Find product by SKU/slug
-  const product = useMemo(() => {
-    return MOCK_PRODUCTS.find(p => p.sku === slug || p.id === slug) || null;
-  }, [slug]);
+  // Read cart items from React Query cache (single source of truth)
+  const cartData = queryClient.getQueryData<import('../../../types').CartData>(queryKeys.cart());
+  const cartItems = cartData?.items ?? [];
+
+  const productId = slug || '';
+
+  // 1. Fetch Product Details
+  const { data: product, isLoading: isProductLoading, isError: isProductError } = useQuery({
+    queryKey: queryKeys.product(productId),
+    queryFn: () => catalogService.getProductById(productId),
+    enabled: !!productId,
+  });
+
+  // 2. Fetch Related Products
+  const { data: relatedProducts } = useQuery({
+    queryKey: queryKeys.relatedProducts(productId),
+    queryFn: () => catalogService.getRelatedProducts(productId),
+    enabled: !!productId,
+  });
+
+  // 3. Fetch Frequently Bought Together
+  const { data: boughtTogether } = useQuery({
+    queryKey: queryKeys.boughtTogether(productId),
+    queryFn: () => catalogService.getFrequentlyBoughtTogether(productId),
+    enabled: !!productId,
+  });
+
+  // 4. Fetch Reviews
+  const { data: reviewsData } = useQuery({
+    queryKey: queryKeys.reviews(productId),
+    queryFn: () => catalogService.getProductReviews(productId, 1, 30),
+    enabled: !!productId,
+  });
+
+  // 5. Fetch Wishlist
+  const { data: wishlistData } = useQuery({
+    queryKey: queryKeys.wishlist(),
+    queryFn: () => catalogService.getWishlist(),
+  });
+  const wishlist = wishlistData || [];
+
+  const reviews = reviewsData || [];
 
   // Selected Variant (default to first variant if exists)
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<import('../../../types').ProductVariant | null>(null);
 
   // Pincode Verification State
   const [pincode, setPincode] = useState('');
@@ -59,13 +101,45 @@ export const ProductDetailPage: React.FC = () => {
   useEffect(() => {
     if (product) {
       addRecentlyViewed(product);
-      if (product.variantsList && product.variantsList.length > 0) {
-        setSelectedVariant(product.variantsList[0]);
+      if (product.variants && product.variants.length > 0) {
+        setSelectedVariant(product.variants[0]);
       } else {
         setSelectedVariant(null);
       }
     }
   }, [product, addRecentlyViewed]);
+
+  // Wishlist toggle mutation
+  const toggleWishlistMutation = useMutation({
+    mutationFn: async (targetProduct: CatalogProduct) => {
+      const isWishlisted = wishlist.some(item => item.id === targetProduct.id);
+      if (isWishlisted) {
+        return catalogService.removeFromWishlist(targetProduct.id);
+      } else {
+        return catalogService.addToWishlist(targetProduct.id);
+      }
+    },
+    onMutate: async (targetProduct) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.wishlist() });
+      const previousWishlist = queryClient.getQueryData<CatalogProduct[]>(queryKeys.wishlist()) || [];
+      const exists = previousWishlist.some(item => item.id === targetProduct.id);
+      const newWishlist = exists
+        ? previousWishlist.filter(item => item.id !== targetProduct.id)
+        : [...previousWishlist, targetProduct];
+      queryClient.setQueryData(queryKeys.wishlist(), newWishlist);
+      storeToggleWishlist(targetProduct);
+      return { previousWishlist };
+    },
+    onError: (_err, _targetProduct, context) => {
+      if (context) {
+        queryClient.setQueryData(queryKeys.wishlist(), context.previousWishlist);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wishlist() });
+      queryClient.invalidateQueries({ queryKey: ['homeFeed'] });
+    }
+  });
 
   // Calculations
   const isWishlisted = useMemo(() => {
@@ -77,18 +151,32 @@ export const ProductDetailPage: React.FC = () => {
   const activeStock = selectedVariant ? selectedVariant.stock : (product?.stock || 0);
   const activeWeight = selectedVariant ? selectedVariant.weightGrams : (product?.weightGrams || 0);
 
-  const cartItem = items.find(
-    item => item.product.id === product?.id && item.selectedVariantId === selectedVariant?.id
+  const cartItem = cartItems.find(
+    (item) => item.productId === product?.id && item.variantId === (selectedVariant?.id ?? null)
   );
   const quantity = cartItem?.quantity || 0;
 
-  // Bundle Frequently Bought Together simulation
-  const bundleProduct = useMemo(() => {
-    if (!product) return null;
-    return MOCK_PRODUCTS.find(p => p.id !== product.id && p.categorySlug === product.categorySlug) || null;
-  }, [product]);
+  const bundleProduct = boughtTogether?.[0] || null;
 
-  if (!product) {
+  // Dynamic rating summary computed from reviews
+  const avgRating = useMemo(() => {
+    if (reviews.length === 0) return 5.0;
+    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+    return parseFloat((sum / reviews.length).toFixed(1));
+  }, [reviews]);
+
+  const reviewsCount = reviews.length;
+
+  if (isProductLoading) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="h-8 w-8 rounded-full border-2 border-brand-emerald border-t-transparent animate-spin" />
+        <p className="text-xs text-text-secondary font-semibold">Loading product specifications...</p>
+      </div>
+    );
+  }
+
+  if (isProductError || !product) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
         <div className="p-3 rounded-full bg-status-error/10 text-status-error">
@@ -125,7 +213,6 @@ export const ProductDetailPage: React.FC = () => {
     }
     setPincodeStatus('LOADING');
     setTimeout(() => {
-      // Simulate verification check (Bengaluru pincodes start with 56)
       if (pincode.startsWith('56')) {
         setPincodeStatus('VERIFIED');
         showToast({
@@ -146,8 +233,10 @@ export const ProductDetailPage: React.FC = () => {
 
   const handleAddBundle = () => {
     if (!bundleProduct) return;
-    addItem(product, selectedVariant?.id);
-    addItem(bundleProduct);
+    addToCart({ productId: product.id, variantId: selectedVariant?.id, quantity: 1 });
+    if (bundleProduct) {
+      addToCart({ productId: bundleProduct.id, quantity: 1 });
+    }
     showToast({
       type: 'success',
       title: 'Bundle Added to Cart',
@@ -156,7 +245,7 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   // Filtered reviews
-  const filteredReviews = (product.reviews || []).filter(rev => {
+  const filteredReviews = reviews.filter(rev => {
     if (selectedReviewRating === null) return true;
     return rev.rating === selectedReviewRating;
   }).sort((a, b) => {
@@ -164,6 +253,11 @@ export const ProductDetailPage: React.FC = () => {
     if (reviewSort === 'LOW') return a.rating - b.rating;
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
+
+  const hasDiscount = product.discountPrice !== undefined;
+  const discountPct = hasDiscount
+    ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
+    : 0;
 
   return (
     <motion.div
@@ -204,7 +298,7 @@ export const ProductDetailPage: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => toggleWishlist(product)}
+                  onClick={() => toggleWishlistMutation.mutate(product)}
                   className="p-2 rounded-lg border border-border-primary bg-bg-secondary text-text-secondary hover:text-status-error cursor-pointer"
                 >
                   <Heart className={cn("h-4.5 w-4.5", isWishlisted && "fill-status-error text-status-error")} />
@@ -232,31 +326,31 @@ export const ProductDetailPage: React.FC = () => {
               <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Best Price</span>
               <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-2xl font-extrabold text-text-primary font-heading">
-                  {formatCurrency(activePrice)}
+                  {formatCurrency(product.discountPrice || activePrice)}
                 </span>
-                {product.priceHistory && product.priceHistory[0] > activePrice && (
+                {hasDiscount && (
                   <span className="text-xs font-bold text-text-secondary line-through">
-                    {formatCurrency(product.priceHistory[0])}
+                    {formatCurrency(product.price)}
                   </span>
                 )}
               </div>
             </div>
 
             {/* Price drop tag */}
-            {product.priceHistory && product.priceHistory[0] > activePrice && (
+            {hasDiscount && (
               <span className="px-2.5 py-1.5 rounded-lg bg-brand-emerald/10 text-brand-emerald text-xs font-extrabold flex items-center gap-1">
                 <TrendingDown className="h-3.5 w-3.5" />
-                Price Dropped
+                {discountPct}% Off
               </span>
             )}
           </div>
 
           {/* Variants Selector */}
-          {product.variantsList && product.variantsList.length > 0 && (
+          {product.variants && product.variants.length > 0 && (
             <div className="space-y-2">
               <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">Select Variation</span>
               <div className="flex flex-wrap gap-2.5">
-                {product.variantsList.map((v) => {
+                {product.variants.map((v) => {
                   const isSelected = selectedVariant?.id === v.id;
                   return (
                     <button
@@ -282,8 +376,10 @@ export const ProductDetailPage: React.FC = () => {
             <div className="p-3 rounded-xl border border-border-primary bg-bg-tertiary flex items-center gap-2">
               <Store className="h-4 w-4 text-text-secondary" />
               <div>
-                <p className="text-[9px] text-text-secondary uppercase tracking-wider font-bold">Store Availability</p>
-                <p className="font-bold text-text-primary mt-0.5">3 stores nearby</p>
+                <p className="text-[9px] text-text-secondary uppercase tracking-wider font-bold">Store Merchant</p>
+                <p className="font-bold text-text-primary mt-0.5 truncate max-w-[120px]">
+                  {product.storeInfo?.name ?? 'Aether Store'}
+                </p>
               </div>
             </div>
             <div className="p-3 rounded-xl border border-border-primary bg-bg-tertiary flex items-center gap-2">
@@ -300,14 +396,6 @@ export const ProductDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Cashback loyalty widget */}
-          {product.cashbackPoints && (
-            <div className="p-3 rounded-xl border border-brand-violet/20 bg-brand-violet/5 flex items-center justify-between text-xs">
-              <span className="font-semibold text-brand-violet">Cashback Coins Reward</span>
-              <span className="font-extrabold text-brand-violet font-heading">+{product.cashbackPoints} Points</span>
-            </div>
-          )}
 
           {/* Pincode Availability Checker */}
           <div className="p-4 rounded-xl border border-border-primary bg-bg-secondary space-y-3">
@@ -352,14 +440,14 @@ export const ProductDetailPage: React.FC = () => {
               <div className="hidden md:flex items-center justify-between border border-border-primary p-3 rounded-xl bg-bg-tertiary">
                 <span className="text-xs font-bold text-text-secondary">Quantity in cart</span>
                 <div className="flex items-center gap-3 bg-brand-emerald text-white rounded-lg px-3 py-1.5 shadow-subtle">
-                  <button onClick={() => updateQuantity(product.id, quantity - 1, selectedVariant?.id)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
+                  <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
                   <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
-                  <button onClick={() => updateQuantity(product.id, quantity + 1, selectedVariant?.id)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
+                  <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
                 </div>
               </div>
             ) : (
               <button
-                onClick={() => addItem(product, selectedVariant?.id)}
+                onClick={() => addToCart({ productId: product.id, variantId: selectedVariant?.id, quantity: 1 })}
                 className="hidden md:flex w-full py-4 bg-brand-emerald text-white hover:bg-brand-emerald-hover font-semibold text-sm rounded-xl items-center justify-center gap-2 shadow-subtle cursor-pointer transition-all"
               >
                 <ShoppingBag className="h-4.5 w-4.5" />
@@ -404,18 +492,13 @@ export const ProductDetailPage: React.FC = () => {
             <div>
               <h4 className="font-bold text-text-primary mb-1">Product Overview</h4>
               <p>{product.description}</p>
-              {product.manufacturerDetails && (
-                <p className="mt-3">
-                  <span className="font-bold text-text-primary">Manufacturer Details:</span> {product.manufacturerDetails}
-                </p>
-              )}
             </div>
           )}
 
           {activeTab === 'SPECS' && (
             <div>
               <h4 className="font-bold text-text-primary mb-1">Ingredients List</h4>
-              <p>{product.ingredients || 'Refer packaging details for specific compositions.'}</p>
+              <p>Refer packaging details for specific compositions.</p>
               {product.fssaiCode && (
                 <div className="mt-4 p-3 rounded-lg border border-border-primary bg-bg-tertiary flex items-center gap-2">
                   <span className="text-lg">🌱</span>
@@ -430,17 +513,17 @@ export const ProductDetailPage: React.FC = () => {
 
           {activeTab === 'NUTRITION' && (
             <div>
-              {product.nutritionalInfo ? (
+              {product.calories || product.proteinGrams || product.carbGrams || product.fatGrams ? (
                 <div className="max-w-xs border border-border-primary rounded-xl overflow-hidden">
                   <div className="bg-bg-tertiary p-3 border-b border-border-primary font-bold text-text-primary">
                     Nutritional Information (Approx per 100g)
                   </div>
                   <div className="divide-y divide-border-primary">
                     {[
-                      { label: 'Energy (Calories)', value: `${product.nutritionalInfo.calories} kcal` },
-                      { label: 'Protein', value: `${product.nutritionalInfo.proteinGrams} g` },
-                      { label: 'Carbohydrates', value: `${product.nutritionalInfo.carbsGrams} g` },
-                      { label: 'Fat', value: `${product.nutritionalInfo.fatGrams} g` },
+                      { label: 'Energy (Calories)', value: product.calories ? `${product.calories} kcal` : '--' },
+                      { label: 'Protein', value: product.proteinGrams ? `${product.proteinGrams} g` : '--' },
+                      { label: 'Carbohydrates', value: product.carbGrams ? `${product.carbGrams} g` : '--' },
+                      { label: 'Fat', value: product.fatGrams ? `${product.fatGrams} g` : '--' },
                     ].map((item, idx) => (
                       <div key={idx} className="p-3 flex justify-between font-semibold">
                         <span className="text-text-secondary">{item.label}</span>
@@ -458,7 +541,7 @@ export const ProductDetailPage: React.FC = () => {
           {activeTab === 'RETURN' && (
             <div>
               <h4 className="font-bold text-text-primary mb-1">Return & Refund Policy</h4>
-              <p>{product.returnPolicy || 'Non-returnable item. Instant cancellations and refunds apply for spoiled products on arrival.'}</p>
+              <p>Non-returnable item. Instant cancellations and refunds apply for spoiled products on arrival.</p>
             </div>
           )}
         </div>
@@ -505,6 +588,14 @@ export const ProductDetailPage: React.FC = () => {
         </section>
       )}
 
+      {/* Related Products Grid */}
+      {relatedProducts && relatedProducts.length > 0 && (
+        <section className="space-y-4">
+          <h3 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">Customers Also Bought</h3>
+          <ProductCardGrid products={relatedProducts.slice(0, 4)} />
+        </section>
+      )}
+
       {/* Customer Reviews Section */}
       <section className="space-y-6">
         <div className="flex items-center justify-between gap-4">
@@ -530,20 +621,20 @@ export const ProductDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Overall breakdown card */}
           <div className="p-4 rounded-2xl border border-border-primary bg-bg-secondary flex flex-col items-center justify-center text-center">
-            <span className="text-4xl font-extrabold text-text-primary font-heading">{product.rating}</span>
+            <span className="text-4xl font-extrabold text-text-primary font-heading">{avgRating}</span>
             <div className="flex items-center gap-0.5 text-status-warning mt-1.5">
               {[1, 2, 3, 4, 5].map((star) => (
-                <Star key={star} className={cn("h-4 w-4", star <= Math.round(product.rating) ? "fill-status-warning" : "text-border-primary")} />
+                <Star key={star} className={cn("h-4 w-4", star <= Math.round(avgRating) ? "fill-status-warning text-status-warning" : "text-border-primary")} />
               ))}
             </div>
-            <p className="text-[10px] text-text-secondary font-bold mt-2 uppercase tracking-wider">{product.reviewsCount} customer reviews</p>
+            <p className="text-[10px] text-text-secondary font-bold mt-2 uppercase tracking-wider">{reviewsCount} customer reviews</p>
           </div>
 
           {/* Rating distribution chart */}
           <div className="p-4 rounded-2xl border border-border-primary bg-bg-secondary md:col-span-2 space-y-2 text-xs font-semibold text-text-secondary">
             {[5, 4, 3, 2, 1].map((stars) => {
-              // Simulated distribution percentages
-              const pct = stars === 5 ? 70 : stars === 4 ? 20 : stars === 3 ? 7 : 2;
+              const matchingCount = reviews.filter(r => r.rating === stars).length;
+              const pct = reviews.length > 0 ? Math.round((matchingCount / reviews.length) * 100) : 0;
               const isSelected = selectedReviewRating === stars;
               return (
                 <button
@@ -569,7 +660,7 @@ export const ProductDetailPage: React.FC = () => {
         {filteredReviews.length > 0 ? (
           <div className="divide-y divide-border-primary border border-border-primary rounded-2xl bg-bg-secondary overflow-hidden">
             {filteredReviews.map((rev) => (
-              <div key={rev.id} className="p-4 space-y-2 text-xs">
+              <div key={rev.id} className="p-4 space-y-2 text-xs font-semibold">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-text-primary">{rev.userName}</span>
@@ -588,7 +679,7 @@ export const ProductDetailPage: React.FC = () => {
                   ))}
                 </div>
 
-                <p className="text-text-secondary font-semibold">{rev.comment}</p>
+                <p className="text-text-secondary">{rev.comment}</p>
               </div>
             ))}
           </div>
@@ -609,13 +700,13 @@ export const ProductDetailPage: React.FC = () => {
         {activeStock > 0 ? (
           quantity > 0 ? (
             <div className="flex items-center gap-3 bg-brand-emerald text-white rounded-xl px-3 py-2 shadow-subtle">
-              <button onClick={() => updateQuantity(product.id, quantity - 1, selectedVariant?.id)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
+              <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
               <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
-              <button onClick={() => updateQuantity(product.id, quantity + 1, selectedVariant?.id)} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
+              <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
             </div>
           ) : (
             <button
-              onClick={() => addItem(product, selectedVariant?.id)}
+              onClick={() => addToCart({ productId: product.id, variantId: selectedVariant?.id, quantity: 1 })}
               className="py-3 px-6 bg-brand-emerald text-white hover:bg-brand-emerald-hover font-semibold text-xs rounded-xl shadow-subtle cursor-pointer"
             >
               Add to Cart
@@ -626,7 +717,7 @@ export const ProductDetailPage: React.FC = () => {
         )}
       </div>
 
-      {/* 6. Full Screen Image Modal Gallery */}
+      {/* Full Screen Image Modal Gallery */}
       {showImagePreview && (
         <div 
           onClick={() => setShowImagePreview(false)}

@@ -41,6 +41,39 @@ export class AdminRepository {
           isActive: true,
           isVerified: true,
           createdAt: true,
+          customer: {
+            select: {
+              id: true,
+              fullName: true,
+              wallet: { select: { balance: true } },
+              orders: { select: { id: true } },
+            },
+          },
+          merchant: {
+            select: {
+              id: true,
+              fullName: true,
+              isApproved: true,
+              store: {
+                select: {
+                  id: true,
+                  name: true,
+                  commissionRate: true,
+                  rating: true,
+                },
+              },
+            },
+          },
+          rider: {
+            select: {
+              id: true,
+              fullName: true,
+              vehicleType: true,
+              isApproved: true,
+              balance: true,
+              rating: true,
+            },
+          },
         },
       }),
       this.db.user.count({ where }),
@@ -78,6 +111,7 @@ export class AdminRepository {
   public async findMerchantById(merchantId: string) {
     return this.db.merchant.findUnique({
       where: { id: merchantId },
+      include: { store: true },
     });
   }
 
@@ -447,6 +481,48 @@ export class AdminRepository {
         unitsSold,
         gmv: parseFloat(gmv.toFixed(2)),
       };
+    });
+  }
+
+  public async findAuditLogs(params: {
+    page: number;
+    limit: number;
+  }): Promise<{ logs: any[]; total: number }> {
+    const { page, limit } = params;
+    const skip = (page - 1) * limit;
+
+    const [logs, total] = await Promise.all([
+      this.db.auditLog.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              email: true,
+              role: true,
+            },
+          },
+        },
+      }),
+      this.db.auditLog.count(),
+    ]);
+
+    return { logs, total };
+  }
+
+  public async updateStoreCommission(merchantId: string, commissionRatePercentage: number) {
+    const merchant = await this.db.merchant.findUnique({
+      where: { id: merchantId },
+      include: { store: true },
+    });
+    if (!merchant || !merchant.store) {
+      throw new Error('Merchant or associated storefront not found.');
+    }
+
+    return this.db.store.update({
+      where: { id: merchant.store.id },
+      data: { commissionRate: commissionRatePercentage / 100 },
     });
   }
 }

@@ -22,7 +22,7 @@ export const globalRateLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skip: (req) => process.env.NODE_ENV === 'test' || req.path === '/api/health',
+  skip: (req) => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development' || req.path === '/api/health',
 });
 
 // ─── Auth Rate Limiter (login / OTP send) ────────────────────────────────────
@@ -34,7 +34,7 @@ export const authRateLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
   message: 'Too many authentication attempts. Please try again in 15 minutes.',
 });
 
@@ -47,7 +47,7 @@ export const otpRateLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
   message: 'OTP request limit reached. Please try again in 1 hour.',
 });
 
@@ -60,7 +60,7 @@ export const apiRateLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
 });
 
 // ─── Upload Rate Limiter ──────────────────────────────────────────────────────
@@ -72,5 +72,5 @@ export const uploadRateLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
 });

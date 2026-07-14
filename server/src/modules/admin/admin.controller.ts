@@ -12,6 +12,7 @@ import {
   createCouponSchema,
   updateCouponSchema,
   bulkSettingsSchema,
+  updateCommissionSchema,
 } from './admin.validator';
 
 export class AdminController {
@@ -311,6 +312,34 @@ export class AdminController {
     try {
       const report = await jobsService.runAllJobs();
       sendSuccess(res, report, 'Background jobs executed successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public async getAuditLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const query = {
+        page: req.query.page ? Number(req.query.page) : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      };
+
+      const data = await adminService.getAuditLogs(query);
+      sendSuccess(res, data, 'Audit logs retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  public async updateMerchantCommission(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const adminUserId = req.user!.userId;
+      const merchantId = req.params.merchantId as string;
+      const { commissionRate } = updateCommissionSchema.parse(req.body);
+      const ipAddress = (req.ip || '127.0.0.1') as string;
+
+      const data = await adminService.updateMerchantCommission(adminUserId, merchantId, commissionRate, ipAddress);
+      sendSuccess(res, data, 'Merchant commission rate adjusted successfully');
     } catch (error) {
       next(error);
     }

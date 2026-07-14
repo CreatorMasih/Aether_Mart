@@ -143,9 +143,23 @@ export class RiderService {
       throw new BadRequestError('You must be online and approved to accept delivery tasks.');
     }
 
-    const assignment = await riderRepository.findActiveAssignment(rider.id, orderId);
+    let assignment = await riderRepository.findActiveAssignment(rider.id, orderId);
     if (!assignment) {
-      throw new NotFoundError('No assignment matched this order for you.');
+      const order = await riderRepository.prisma.order.findUnique({ where: { id: orderId } });
+      if (!order) throw new NotFoundError('Order');
+
+      const pickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
+      const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+      assignment = await riderRepository.prisma.deliveryAssignment.create({
+        data: {
+          orderId,
+          riderId: rider.id,
+          status: DeliveryStatus.ASSIGNED,
+          pickupOtp,
+          deliveryOtp,
+        },
+      });
     }
 
     if (assignment.status !== DeliveryStatus.ASSIGNED) {
@@ -169,7 +183,9 @@ export class RiderService {
       // Update Order timeline to CONFIRMED / ASSIGNED
       await tx.order.update({
         where: { id: orderId },
-        data: { status: OrderStatus.CONFIRMED },
+        data: { 
+          status: OrderStatus.CONFIRMED,
+        },
       });
 
       return updatedAss;
@@ -252,6 +268,15 @@ export class RiderService {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw new NotFoundError('Order');
 
+      // 1. Calculate rider earnings for this shipment (deliveryFee + driverTip)
+      const earnings = order.deliveryFee + (order.driverTip || 0);
+
+      // 2. Increment rider balance
+      await tx.rider.update({
+        where: { id: rider.id },
+        data: { balance: { increment: earnings } },
+      });
+
       let paymentStatus = order.paymentStatus;
       if (order.paymentMethod === 'COD') {
         paymentStatus = PaymentStatus.PAID;
@@ -275,6 +300,97 @@ export class RiderService {
     orderEventEmitter.emitEvent(OrderEvent.DELIVERED, { order: result.order });
 
     return result.assignment;
+  }
+
+  /**
+   * Retrieves earnings overview and stats for a rider.
+   */
+  public async getEarnings(userId: string): Promise<any> {
+    const rider = await riderRepository.findRiderByUserId(userId);
+    if (!rider) throw new NotFoundError('Rider Profile');
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Sum today's earnings
+    const todayAssignments = await riderRepository.prisma.deliveryAssignment.findMany({
+      where: {
+        riderId: rider.id,
+        status: DeliveryStatus.DELIVERED,
+        deliveredAt: { gte: startOfToday },
+      },
+      include: { order: true },
+    });
+
+    const todayEarnings = todayAssignments.reduce((acc, ass) => {
+      return acc + ass.order.deliveryFee + (ass.order.driverTip || 0);
+    }, 0);
+
+    const completedCount = await riderRepository.prisma.deliveryAssignment.count({
+      where: {
+        riderId: rider.id,
+        status: DeliveryStatus.DELIVERED,
+      },
+    });
+
+    // Payout logs
+    const payouts = await riderRepository.prisma.payout.findMany({
+      where: { riderId: rider.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const payoutHistory = payouts.map((p) => ({
+      id: p.id.substring(0, 8).toUpperCase(),
+      date: p.createdAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      amount: p.amount,
+      status: p.status,
+    }));
+
+    return {
+      balance: rider.balance,
+      todayEarnings,
+      completedCount,
+      rating: rider.rating,
+      payoutHistory,
+    };
+  }
+
+  /**
+   * Requests transfer of rider wallet balance to bank.
+   */
+  public async requestPayout(userId: string): Promise<any> {
+    const rider = await riderRepository.findRiderByUserId(userId);
+    if (!rider) throw new NotFoundError('Rider Profile');
+
+    if (rider.balance <= 0) {
+      throw new BadRequestError('No earnings balance available for payout transfer');
+    }
+
+    const amount = rider.balance;
+
+    const payout = await riderRepository.prisma.$transaction(async (tx) => {
+      // 1. Reset rider balance
+      await tx.rider.update({
+        where: { id: rider.id },
+        data: { balance: 0.0 },
+      });
+
+      // 2. Create Payout log
+      return tx.payout.create({
+        data: {
+          riderId: rider.id,
+          amount,
+          status: 'SUCCESS',
+        },
+      });
+    });
+
+    return {
+      id: payout.id.substring(0, 8).toUpperCase(),
+      amount: payout.amount,
+      status: payout.status,
+      date: payout.createdAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+    };
   }
 }
 

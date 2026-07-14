@@ -1,13 +1,17 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Star, Clock, MapPin } from 'lucide-react';
-import { MOCK_STORES } from '../services/mock-catalog-data';
+import type { Store } from '../../../types';
 import { cardHover } from '../../../core/theme/animations';
 
-export const StoreCardGrid: React.FC = () => {
+interface StoreCardGridProps {
+  stores: Store[];
+}
+
+export const StoreCardGrid: React.FC<StoreCardGridProps> = ({ stores }) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {MOCK_STORES.map((store) => (
+      {stores.map((store) => (
         <motion.div
           key={store.id}
           variants={cardHover}
@@ -17,7 +21,7 @@ export const StoreCardGrid: React.FC = () => {
         >
           {/* Logo Circle */}
           <div className="h-12 w-12 rounded-xl bg-bg-tertiary border border-border-primary/60 flex items-center justify-center text-2xl shadow-subtle flex-shrink-0">
-            {store.logoUrl}
+            {store.logoUrl || '🏪'}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -35,7 +39,7 @@ export const StoreCardGrid: React.FC = () => {
               <div className="h-3 w-px bg-border-primary" />
               <div className="flex items-center gap-1 font-bold text-brand-emerald">
                 <Clock className="h-3.5 w-3.5" />
-                {store.deliveryTimeMins} mins
+                {store.deliveryTimeMins || (store as any).deliveryTime || 10} mins
               </div>
             </div>
           </div>

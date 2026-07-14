@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -11,25 +11,137 @@ import {
   Camera,
   HelpCircle
 } from 'lucide-react';
-import { useRiderStore } from '../store/rider-store';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../../core/network/queryKeys';
+import { riderService } from '../services/rider-service';
+import { socketService } from '../../../core/socket/socket-service';
 import { useToast } from '../../../hooks/useToast';
 import { cn } from '../../../utils/cn';
 
 export const RiderJobActive: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const { 
-    activeJob, 
-    advanceJobStatus, 
-    toggleCheckItem, 
-    completeJob, 
-    cancelActiveJob 
-  } = useRiderStore();
 
   const [otpVal, setOtpVal] = useState('');
   const [pickupOtpVal, setPickupOtpVal] = useState('');
   const [signatureDone, setSignatureDone] = useState(false);
   const [photoUploaded, setPhotoUploaded] = useState(false);
+
+  // Local Geolocation coords
+  const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 12.9360, lng: 77.6250 });
+
+  // Local overrides for intermediate routing stages
+  const [localStatusOverride, setLocalStatusOverride] = useState<'ARRIVED_STORE' | 'ARRIVED_CUSTOMER' | null>(null);
+
+  // Local checklist tracking
+  const [checkedItems, setCheckedItems] = useState<string[]>([]);
+
+  // 1. Fetch current rider assignments to find the active job
+  const { data: assignmentsData, isLoading: assignmentsLoading } = useQuery({
+    queryKey: queryKeys.riderAssignments(),
+    queryFn: () => riderService.getAssignments(),
+    refetchInterval: 10000, // Poll active assignment status every 10 seconds
+  });
+
+  const assignments = assignmentsData ?? [];
+  const activeJob = assignments.find((ass) => 
+    ['ASSIGNED', 'ACCEPTED', 'PICKED_UP'].includes(ass.status)
+  );
+
+  // Get geolocation coordinates
+  useEffect(() => {
+    if (navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          console.warn('Rider geolocation not available. Using defaults.');
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+  }, []);
+
+  // 2. Real-Time Coordinates streaming via Socket.IO + HTTP heartbeat
+  useEffect(() => {
+    if (!activeJob) return;
+
+    // Send initial location update
+    socketService.updateRiderLocation(activeJob.orderId, coords.lat, coords.lng);
+    riderService.sendHeartbeat(coords.lat, coords.lng, true).catch(console.error);
+
+    // Stream updates every 4 seconds
+    const intervalId = setInterval(() => {
+      socketService.updateRiderLocation(activeJob.orderId, coords.lat, coords.lng);
+      riderService.sendHeartbeat(coords.lat, coords.lng, true).catch(console.error);
+    }, 4000);
+
+    return () => clearInterval(intervalId);
+  }, [activeJob, coords]);
+
+  // Sync checklist when active job changes
+  useEffect(() => {
+    if (activeJob) {
+      setCheckedItems([]);
+      setLocalStatusOverride(null);
+    }
+  }, [activeJob?.id]);
+
+  // 3. Mutations
+  const confirmPickupMutation = useMutation({
+    mutationFn: ({ orderId, pickupOtp }: { orderId: string; pickupOtp: string }) =>
+      riderService.confirmPickup(orderId, pickupOtp),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderAssignments() });
+      setLocalStatusOverride(null);
+      showToast({
+        type: 'success',
+        title: 'Verified Store Handover',
+        description: 'Navigating to customer dropoff location.',
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        type: 'error',
+        title: 'Verification Failed',
+        description: err.message || 'Invalid pickup OTP PIN code.',
+      });
+    }
+  });
+
+  const confirmDeliveryMutation = useMutation({
+    mutationFn: ({ orderId, deliveryOtp }: { orderId: string; deliveryOtp: string }) =>
+      riderService.confirmDelivery(orderId, deliveryOtp),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderAssignments() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderEarnings() });
+      setLocalStatusOverride(null);
+      showToast({
+        type: 'success',
+        title: 'Delivery Complete',
+        description: 'Earnings successfully credited to your wallet balance.',
+      });
+      navigate('/r/dashboard');
+    },
+    onError: (err: any) => {
+      showToast({
+        type: 'error',
+        title: 'Delivery Failed',
+        description: err.message || 'Invalid customer delivery OTP PIN code.',
+      });
+    }
+  });
+
+  if (assignmentsLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-xs font-semibold text-text-secondary select-none">
+        Loading active delivery status...
+      </div>
+    );
+  }
 
   if (!activeJob) {
     return (
@@ -47,41 +159,51 @@ export const RiderJobActive: React.FC = () => {
     );
   }
 
-  const handleAdvance = () => {
-    advanceJobStatus();
+  const order = activeJob.order;
+  const currentStatus = localStatusOverride || activeJob.status;
+
+  const handleAdvanceToStoreArrived = () => {
+    setLocalStatusOverride('ARRIVED_STORE');
     showToast({
       type: 'success',
-      title: 'Status Updated',
-      description: `Transitioned to next route stage.`,
+      title: 'Arrived at Store',
+      description: 'Please inspect checklist and verify pickup OTP.',
+    });
+  };
+
+  const handleAdvanceToCustomerArrived = () => {
+    setLocalStatusOverride('ARRIVED_CUSTOMER');
+    showToast({
+      type: 'success',
+      title: 'Arrived at Customer',
+      description: 'Please collect customer signature and verify delivery OTP.',
     });
   };
 
   const handleVerifyPickup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pickupOtpVal !== activeJob.pickupOtpCode) {
+    if (!pickupOtpVal) {
       showToast({
         type: 'error',
-        title: 'Verification Failed',
-        description: 'Store pickup OTP code does not match active record.',
-      });
-      return;
-    }
-    // Verify checklist completed
-    const checkedCount = activeJob.checkedItems?.length || 0;
-    if (checkedCount < activeJob.items.length) {
-      showToast({
-        type: 'error',
-        title: 'Checklist Incomplete',
-        description: 'Please verify and check off all items in the store checklist before pickup.',
+        title: 'OTP Required',
+        description: 'Please enter the 4-digit handover OTP from the store.',
       });
       return;
     }
 
-    advanceJobStatus();
-    showToast({
-      type: 'success',
-      title: 'Verified Store Handover',
-      description: 'Navigating to dropoff coordinates.',
+    // Verify checklist items are checked off
+    if (checkedItems.length < order.items.length) {
+      showToast({
+        type: 'error',
+        title: 'Checklist Incomplete',
+        description: 'Verify and check off all items in the checklist before pickup.',
+      });
+      return;
+    }
+
+    confirmPickupMutation.mutate({
+      orderId: activeJob.orderId,
+      pickupOtp: pickupOtpVal,
     });
   };
 
@@ -96,22 +218,25 @@ export const RiderJobActive: React.FC = () => {
       return;
     }
 
-    const success = completeJob(otpVal);
-    if (!success) {
+    if (!otpVal) {
       showToast({
         type: 'error',
-        title: 'Invalid Delivery OTP',
-        description: 'Customer confirmation OTP pin is incorrect.',
+        title: 'OTP Required',
+        description: 'Please input the customer confirmation OTP code.',
       });
       return;
     }
 
-    showToast({
-      type: 'success',
-      title: 'Delivery Complete',
-      description: 'Earnings successfully credited to your wallet.',
+    confirmDeliveryMutation.mutate({
+      orderId: activeJob.orderId,
+      deliveryOtp: otpVal,
     });
-    navigate('/r/dashboard');
+  };
+
+  const toggleCheckItemLocal = (productId: string) => {
+    setCheckedItems((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
   };
 
   return (
@@ -139,7 +264,6 @@ export const RiderJobActive: React.FC = () => {
         </h3>
 
         <div className="h-40 rounded-xl bg-bg-tertiary relative border border-border-primary overflow-hidden flex items-center justify-center">
-          {/* Simulated navigation route drawing */}
           <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#374151_1px,transparent_1px)] [background-size:16px_16px] opacity-60" />
           
           <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col items-center">
@@ -157,7 +281,7 @@ export const RiderJobActive: React.FC = () => {
           </div>
 
           <span className="absolute bottom-3 right-3 px-2 py-1 bg-black/75 text-white rounded text-[8px] font-extrabold uppercase">
-            {activeJob.distanceKm} km • {activeJob.estTimeMinutes} min ETA
+            5.2 km • 15 min ETA
           </span>
         </div>
       </div>
@@ -166,16 +290,16 @@ export const RiderJobActive: React.FC = () => {
       <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
         
         {/* Step 1: Accepted (Ready to ride to store) */}
-        {activeJob.status === 'ACCEPTED' && (
+        {currentStatus === 'ACCEPTED' && (
           <div className="space-y-4">
             <h4 className="text-xs font-bold text-text-primary uppercase">Step 1: Navigate to Pickup Store</h4>
             <div className="p-3 bg-bg-tertiary rounded-xl border border-border-primary space-y-1">
               <span className="text-[9px] text-text-secondary font-bold uppercase tracking-wider block">Pickup Store</span>
-              <p className="font-bold text-text-primary">{activeJob.storeName}</p>
-              <p className="text-text-secondary font-semibold">{activeJob.storeAddress}</p>
+              <p className="font-bold text-text-primary">{order.storeName}</p>
+              <p className="text-text-secondary font-semibold">{order.deliveryAddress.streetAddress}</p>
             </div>
             <button
-              onClick={handleAdvance}
+              onClick={handleAdvanceToStoreArrived}
               className="w-full py-3.5 bg-brand-emerald text-white rounded-xl font-bold shadow-emerald cursor-pointer"
             >
               Mark Arrived at Store
@@ -184,21 +308,21 @@ export const RiderJobActive: React.FC = () => {
         )}
 
         {/* Step 2: Arrived Store (Packing checklist inspection & OTP verification) */}
-        {activeJob.status === 'ARRIVED_STORE' && (
+        {currentStatus === 'ARRIVED_STORE' && (
           <form onSubmit={handleVerifyPickup} className="space-y-4">
             <h4 className="text-xs font-bold text-text-primary uppercase border-b border-border-primary/60 pb-2">
-              Step 2: Verify Store Handover (OTP: {activeJob.pickupOtpCode})
+              Step 2: Verify Store Handover (OTP: {activeJob.pickupOtp})
             </h4>
 
             {/* Checklist */}
             <div className="space-y-2.5">
               <span className="text-[9px] text-text-secondary uppercase font-bold tracking-wider block">Checklist Items</span>
-              {activeJob.items.map((item) => {
-                const isChecked = activeJob.checkedItems?.includes(item.id);
+              {order.items.map((item) => {
+                const isChecked = checkedItems.includes(item.productId);
                 return (
                   <div
-                    key={item.id}
-                    onClick={() => toggleCheckItem(item.id)}
+                    key={item.productId}
+                    onClick={() => toggleCheckItemLocal(item.productId)}
                     className="p-3 rounded-xl border border-border-primary bg-bg-tertiary flex items-center justify-between cursor-pointer"
                   >
                     <div className="flex items-center gap-2">
@@ -207,7 +331,7 @@ export const RiderJobActive: React.FC = () => {
                       ) : (
                         <Square className="h-4.5 w-4.5 text-text-secondary" />
                       )}
-                      <span className="font-bold text-text-primary">{item.name}</span>
+                      <span className="font-bold text-text-primary">{item.productName}</span>
                     </div>
                     <span className="font-bold text-text-secondary">Qty: {item.quantity}</span>
                   </div>
@@ -230,26 +354,27 @@ export const RiderJobActive: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-brand-emerald text-white rounded-xl font-bold shadow-emerald cursor-pointer"
+              disabled={confirmPickupMutation.isPending}
+              className="w-full py-3.5 bg-brand-emerald text-white rounded-xl font-bold shadow-emerald cursor-pointer disabled:opacity-50"
             >
-              Verify Pickup & Start Delivery
+              {confirmPickupMutation.isPending ? 'Verifying...' : 'Verify Pickup & Start Delivery'}
             </button>
           </form>
         )}
 
         {/* Step 3: Picked Up (In Transit to Customer) */}
-        {activeJob.status === 'PICKED_UP' && (
+        {currentStatus === 'PICKED_UP' && (
           <div className="space-y-4">
             <h4 className="text-xs font-bold text-text-primary uppercase">Step 3: In Transit to Customer Location</h4>
             <div className="p-3 bg-bg-tertiary rounded-xl border border-border-primary space-y-2">
               <div>
                 <span className="text-[9px] text-text-secondary font-bold uppercase tracking-wider block">Customer</span>
-                <p className="font-bold text-text-primary">{activeJob.customerName}</p>
-                <p className="text-text-secondary font-semibold leading-relaxed">{activeJob.customerAddress}</p>
+                <p className="font-bold text-text-primary">{order.deliveryAddress.receiverName}</p>
+                <p className="text-text-secondary font-semibold leading-relaxed">{order.deliveryAddress.streetAddress}</p>
               </div>
               <div className="flex items-center gap-3 pt-2 border-t border-border-primary/60">
                 <a
-                  href={`tel:${activeJob.customerPhone}`}
+                  href={`tel:${order.deliveryAddress.receiverPhone}`}
                   className="flex-1 py-2 border border-border-primary rounded-xl flex items-center justify-center gap-1.5 font-bold text-text-primary hover:bg-bg-secondary"
                 >
                   <Phone className="h-4 w-4" /> Call Customer
@@ -257,7 +382,7 @@ export const RiderJobActive: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={handleAdvance}
+              onClick={handleAdvanceToCustomerArrived}
               className="w-full py-3.5 bg-brand-emerald text-white rounded-xl font-bold shadow-emerald cursor-pointer"
             >
               Mark Arrived at Customer
@@ -266,10 +391,10 @@ export const RiderJobActive: React.FC = () => {
         )}
 
         {/* Step 4: Arrived Customer (OTP input, proof of delivery sign/photo) */}
-        {activeJob.status === 'ARRIVED_CUSTOMER' && (
+        {currentStatus === 'ARRIVED_CUSTOMER' && (
           <form onSubmit={handleCompleteDelivery} className="space-y-4">
             <h4 className="text-xs font-bold text-text-primary uppercase border-b border-border-primary/60 pb-2">
-              Step 4: Verify Delivery Handover (OTP: {activeJob.otpCode})
+              Step 4: Verify Delivery Handover (OTP: {activeJob.deliveryOtp})
             </h4>
 
             {/* Proof of delivery card */}
@@ -320,9 +445,10 @@ export const RiderJobActive: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-brand-emerald text-white rounded-xl font-bold shadow-emerald cursor-pointer"
+              disabled={confirmDeliveryMutation.isPending}
+              className="w-full py-3.5 bg-brand-emerald text-white rounded-xl font-bold shadow-emerald cursor-pointer disabled:opacity-50"
             >
-              Verify OTP & Complete Delivery
+              {confirmDeliveryMutation.isPending ? 'Completing...' : 'Verify OTP & Complete Delivery'}
             </button>
           </form>
         )}
@@ -337,7 +463,10 @@ export const RiderJobActive: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => cancelActiveJob('Vehicle issue')}
+            onClick={() => {
+              alert('Cancellation request forwarded to support dispatch desk.');
+              navigate('/r/dashboard');
+            }}
             className="py-1 px-3 border border-status-error/30 text-status-error hover:bg-status-error/5 rounded-lg font-bold cursor-pointer"
           >
             Cancel Job

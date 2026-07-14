@@ -51,3 +51,7 @@ export const bulkSettingsSchema = z.object({
     })
   ).min(1, 'Settings array cannot be empty'),
 });
+
+export const updateCommissionSchema = z.object({
+  commissionRate: z.number().min(0, 'Commission must be positive').max(100, 'Commission cannot exceed 100%'),
+});

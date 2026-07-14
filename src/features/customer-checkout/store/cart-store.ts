@@ -1,97 +1,36 @@
+/**
+ * cart-store.ts — Minimal Zustand store for OPTIMISTIC UI state only.
+ *
+ * ⚠️  The backend (GET /cart) is the single source of truth for:
+ *   - Item prices
+ *   - Totals
+ *   - Delivery fee
+ *   - Tax
+ *   - Discounts
+ *
+ * This store is ONLY used to:
+ *   1. Track how many items are in the cart badge (count only, from React Query cache)
+ *   2. Provide addItem/removeItem/updateQuantity for optimistic updates
+ *      (immediately replaced by backend response via useCartMutations)
+ *
+ * Do NOT use getCartSubtotal / getCartTotal here — all pricing comes from
+ * PricingData returned by POST /cart/recalculate via useQuery.
+ */
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { CartItem, Product } from '../../../types';
-import { PLATFORM_CONFIG } from '../../../core/config/constants';
 
-interface CartState {
-  items: CartItem[];
-  addItem: (product: Product, variantId?: string) => void;
-  removeItem: (productId: string, variantId?: string) => void;
-  updateQuantity: (productId: string, quantity: number, variantId?: string) => void;
-  clearCart: () => void;
-  getCartSubtotal: () => number;
-  getCartTotal: () => number;
-  getItemsCount: () => number;
+interface CartCountState {
+  /** Local optimistic item count. Synced from React Query cart cache. */
+  itemCount: number;
+  setItemCount: (count: number) => void;
 }
 
-export const useCartStore = create<CartState>()(
-  persist(
-    (set, get) => ({
-      items: [],
+/**
+ * Lightweight store to drive the cart badge count in the header.
+ * The authoritative cart data lives in React Query (queryKeys.cart()).
+ */
+export const useCartCountStore = create<CartCountState>()((set) => ({
+  itemCount: 0,
+  setItemCount: (count) => set({ itemCount: count }),
+}));
 
-      addItem: (product, variantId) => set((state) => {
-        const existingIdx = state.items.findIndex(
-          (item) => item.product.id === product.id && item.selectedVariantId === variantId
-        );
-
-        let newItems = [...state.items];
-        if (existingIdx > -1) {
-          newItems[existingIdx].quantity += 1;
-        } else {
-          newItems.push({ product, selectedVariantId: variantId, quantity: 1 });
-        }
-
-        return { items: newItems };
-      }),
-
-      removeItem: (productId, variantId) => set((state) => ({
-        items: state.items.filter(
-          (item) => !(item.product.id === productId && item.selectedVariantId === variantId)
-        ),
-      })),
-
-      updateQuantity: (productId, quantity, variantId) => set((state) => {
-        if (quantity <= 0) {
-          return {
-            items: state.items.filter(
-              (item) => !(item.product.id === productId && item.selectedVariantId === variantId)
-            ),
-          };
-        }
-
-        const newItems = state.items.map((item) => {
-          if (item.product.id === productId && item.selectedVariantId === variantId) {
-            return { ...item, quantity };
-          }
-          return item;
-        });
-
-        return { items: newItems };
-      }),
-
-      clearCart: () => set({ items: [] }),
-
-      getCartSubtotal: () => {
-        return get().items.reduce((sum, item) => {
-          // Resolve variant price if selected
-          const variant = item.product.variants?.find((v) => v.id === item.selectedVariantId);
-          const price = variant ? variant.price : item.product.price;
-          return sum + price * item.quantity;
-        }, 0);
-      },
-
-      getItemsCount: () => {
-        return get().items.reduce((sum, item) => sum + item.quantity, 0);
-      },
-
-      getCartTotal: () => {
-        const subtotal = get().getCartSubtotal();
-        if (subtotal === 0) return 0;
-        
-        const deliveryFee = subtotal >= PLATFORM_CONFIG.freeDeliveryThreshold ? 0 : PLATFORM_CONFIG.defaultDeliveryFee;
-        const total = subtotal + deliveryFee + PLATFORM_CONFIG.handlingFee + PLATFORM_CONFIG.surgeFee;
-        const tax = total * PLATFORM_CONFIG.taxRate;
-        
-        return parseFloat((total + tax).toFixed(2));
-      },
-    }),
-    {
-      name: 'aether-cart-storage',
-      partialize: (state) => ({
-        items: state.items,
-      }),
-    }
-  )
-);
-
-export default useCartStore;
+export default useCartCountStore;

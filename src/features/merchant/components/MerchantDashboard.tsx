@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   ShoppingBag, 
@@ -8,39 +8,131 @@ import {
   Sliders,
   DollarSign as BankIcon
 } from 'lucide-react';
-import { useMerchantStore } from '../store/merchant-store';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../../core/network/queryKeys';
+import { merchantService } from '../services/merchant-service';
+import { apiClient } from '../../../core/network/api-client';
+import { useToast } from '../../../hooks/useToast';
 import { formatCurrency } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 
 export const MerchantDashboard: React.FC = () => {
-  const { settings, orders, products, payouts, updateSettings } = useMerchantStore();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [activeChartTab, setActiveChartTab] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
   
   // Local Settings form state
-  const [storeName, setStoreName] = useState(settings.name);
-  const [radius, setRadius] = useState(settings.deliveryRadiusKm);
-  const [minOrder, setMinOrder] = useState(settings.minimumOrderValue);
-  const [holidayMode, setHolidayMode] = useState(settings.holidayMode);
-  
-  // Store calculations
-  const totalRevenue = payouts.settledAmount + payouts.pendingAmount;
-  const completedOrdersCount = orders.filter(o => o.status === 'DELIVERED' || o.status === 'READY_FOR_PICKUP').length;
-  const activeOrdersCount = orders.filter(o => o.status === 'PLACED' || o.status === 'CONFIRMED' || o.status === 'PACKING').length;
-  
-  // Low stock products filter
-  const lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= 5);
-  const outOfStockProducts = products.filter(p => p.stock === 0);
+  const [storeName, setStoreName] = useState('');
+  const [radius, setRadius] = useState(5);
+  const [minOrder, setMinOrder] = useState(0);
+  const [holidayMode, setHolidayMode] = useState(false);
+  const [bankAccount, setBankAccount] = useState('');
+  const [bankName, setBankName] = useState('');
+
+  // 1. Queries
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: queryKeys.merchantDashboard(),
+    queryFn: () => merchantService.getDashboardStats(),
+  });
+
+  const { data: payoutHistoryData } = useQuery({
+    queryKey: queryKeys.merchantPayouts(),
+    queryFn: () => merchantService.getPayouts(),
+  });
+
+  const { data: profileMe } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => {
+      const res = await apiClient.get('/auth/me');
+      return res.data.data;
+    }
+  });
+
+  const store = profileMe?.profile?.store;
+  const merchant = profileMe?.profile;
+
+  // 2. Fetch products to get names of low/out stock alerts
+  const { data: productsData } = useQuery({
+    queryKey: queryKeys.merchantProducts(store?.id || ''),
+    queryFn: async () => {
+      const res = await apiClient.get(`/products?storeId=${store.id}`);
+      return res.data.data.products;
+    },
+    enabled: !!store?.id,
+  });
+
+  // Sync settings form state when profile loads
+  useEffect(() => {
+    if (store) {
+      setStoreName(store.name || '');
+      setRadius(store.deliveryRadiusKm || 5);
+      setMinOrder(store.minimumOrderValue || 0);
+      setHolidayMode(store.isHoliday || false);
+    }
+    if (merchant) {
+      setBankAccount(merchant.bankAccount || '');
+      setBankName(merchant.bankName || '');
+    }
+  }, [store, merchant]);
+
+  // 3. Settings update Mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: (params: Parameters<typeof merchantService.updateProfile>[0]) =>
+      merchantService.updateProfile(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+      showToast({
+        type: 'success',
+        title: 'Settings Saved',
+        description: 'Store configurations updated successfully.',
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        type: 'error',
+        title: 'Save Failed',
+        description: err.message || 'Unable to save settings.',
+      });
+    }
+  });
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings({
-      name: storeName,
+    updateSettingsMutation.mutate({
+      storeName,
       deliveryRadiusKm: radius,
       minimumOrderValue: minOrder,
-      holidayMode: holidayMode
+      isHoliday: holidayMode,
+      bankAccount,
+      bankName,
     });
-    alert('Store configurations registered successfully.');
   };
+
+  const payoutsList = payoutHistoryData ?? [];
+  const productsList = productsData ?? [];
+  const lowStockProducts = productsList.filter((p: any) => p.stock > 0 && p.stock <= 5);
+  const outOfStockProducts = productsList.filter((p: any) => p.stock === 0);
+
+  const totalRevenue = stats?.totalRevenue ?? 0;
+  const completedOrdersCount = stats?.completedOrdersCount ?? 0;
+  const activeOrdersCount = stats?.activeOrdersCount ?? 0;
+  const chartData = stats?.chartData ?? [
+    { label: '08:00', val: 0 },
+    { label: '11:00', val: 0 },
+    { label: '14:00', val: 0 },
+    { label: '17:00', val: 0 },
+    { label: '20:00', val: 0 },
+    { label: '23:00', val: 0 }
+  ];
+
+  if (statsLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-xs font-semibold text-text-secondary select-none">
+        Loading merchant analytics logs...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 text-xs font-semibold text-text-secondary select-none">
@@ -76,7 +168,7 @@ export const MerchantDashboard: React.FC = () => {
               {activeOrdersCount} Orders
             </span>
             <p className="text-[9px] text-text-secondary font-bold mt-0.5 uppercase tracking-wider">
-              {orders.filter(o => o.status === 'CONFIRMED').length} new incoming
+              Incoming from database
             </p>
           </div>
         </div>
@@ -142,16 +234,9 @@ export const MerchantDashboard: React.FC = () => {
 
           {/* Minimalist responsive SVG Bar Chart */}
           <div className="relative h-48 w-full flex items-end justify-between px-6 pt-4 border-b border-border-primary">
-            {[
-              { label: '08:00', val: 30 },
-              { label: '11:00', val: 70 },
-              { label: '14:00', val: 45 },
-              { label: '17:00', val: 90 },
-              { label: '20:00', val: 80 },
-              { label: '23:00', val: 40 }
-            ].map((bar, idx) => (
+            {chartData.map((bar, idx) => (
               <div key={idx} className="flex flex-col items-center flex-1 space-y-2">
-                <div className="relative w-8 rounded-t bg-brand-emerald/10 hover:bg-brand-emerald/20 transition-all flex items-end justify-center" style={{ height: `${bar.val}%` }}>
+                <div className="relative w-8 rounded-t bg-brand-emerald/10 hover:bg-brand-emerald/20 transition-all flex items-end justify-center" style={{ height: `${Math.max(5, bar.val * 20)}%` }}>
                   <span className="absolute -top-6 text-[9px] font-extrabold text-brand-emerald">{bar.val}</span>
                   <div className="w-full h-2 rounded-t bg-brand-emerald" />
                 </div>
@@ -168,8 +253,8 @@ export const MerchantDashboard: React.FC = () => {
             Inventory Alerts
           </h3>
 
-          <div className="space-y-3">
-            {outOfStockProducts.map(p => (
+          <div className="space-y-3 overflow-y-auto max-h-48">
+            {outOfStockProducts.map((p: any) => (
               <div key={p.id} className="p-3 bg-status-error/5 border border-status-error/10 rounded-xl flex items-center justify-between">
                 <div>
                   <h4 className="font-extrabold text-text-primary">{p.name}</h4>
@@ -179,7 +264,7 @@ export const MerchantDashboard: React.FC = () => {
               </div>
             ))}
 
-            {lowStockProducts.map(p => (
+            {lowStockProducts.map((p: any) => (
               <div key={p.id} className="p-3 bg-status-warning/5 border border-status-warning/10 rounded-xl flex items-center justify-between">
                 <div>
                   <h4 className="font-extrabold text-text-primary">{p.name}</h4>
@@ -228,7 +313,7 @@ export const MerchantDashboard: React.FC = () => {
                   id="radius"
                   type="number"
                   value={radius} 
-                  onChange={(e) => setRadius(parseInt(e.target.value))}
+                  onChange={(e) => setRadius(parseFloat(e.target.value))}
                   className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
                 />
               </div>
@@ -238,7 +323,30 @@ export const MerchantDashboard: React.FC = () => {
                   id="minOrder"
                   type="number"
                   value={minOrder} 
-                  onChange={(e) => setMinOrder(parseInt(e.target.value))}
+                  onChange={(e) => setMinOrder(parseFloat(e.target.value))}
+                  className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="bankName" className="text-[10px] font-bold text-text-secondary uppercase">Bank Name</label>
+                <input 
+                  id="bankName"
+                  value={bankName} 
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="e.g. HDFC Bank"
+                  className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="bankAccount" className="text-[10px] font-bold text-text-secondary uppercase">Bank Account Number</label>
+                <input 
+                  id="bankAccount"
+                  value={bankAccount} 
+                  onChange={(e) => setBankAccount(e.target.value)}
+                  placeholder="e.g. 501002938192"
                   className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
                 />
               </div>
@@ -260,9 +368,10 @@ export const MerchantDashboard: React.FC = () => {
 
             <button 
               type="submit"
-              className="py-2.5 px-6 bg-brand-emerald hover:bg-brand-emerald-hover text-white font-bold rounded-xl cursor-pointer"
+              disabled={updateSettingsMutation.isPending}
+              className="py-2.5 px-6 bg-brand-emerald hover:bg-brand-emerald-hover text-white font-bold rounded-xl cursor-pointer disabled:opacity-50"
             >
-              Save Configuration
+              {updateSettingsMutation.isPending ? 'Saving...' : 'Save Configuration'}
             </button>
           </form>
         </div>
@@ -277,19 +386,21 @@ export const MerchantDashboard: React.FC = () => {
           <div className="p-4 rounded-xl bg-bg-tertiary/60 border border-border-primary flex items-center justify-between text-xs">
             <div>
               <span className="text-[9px] text-text-secondary uppercase tracking-wider block font-bold">Payout account</span>
-              <span className="font-bold text-text-primary mt-0.5 block">{settings.bankName} •••• {settings.bankAccount.slice(-4)}</span>
+              <span className="font-bold text-text-primary mt-0.5 block">
+                {bankName ? `${bankName} •••• ${bankAccount.slice(-4)}` : 'No Payout Account Connected'}
+              </span>
             </div>
             <div className="text-right">
               <span className="text-[9px] text-brand-emerald font-bold uppercase block">Pending Settlement</span>
-              <span className="font-extrabold text-text-primary font-heading mt-0.5 block">{formatCurrency(payouts.pendingAmount)}</span>
+              <span className="font-extrabold text-text-primary font-heading mt-0.5 block">₹0.00</span>
             </div>
           </div>
 
           <div className="space-y-2">
             <span className="text-[9px] font-bold text-text-secondary uppercase tracking-wider block">Past settlements logs</span>
             
-            <div className="divide-y divide-border-primary/60 border border-border-primary rounded-xl bg-bg-tertiary/40 overflow-hidden">
-              {payouts.history.map((pay) => (
+            <div className="divide-y divide-border-primary/60 border border-border-primary rounded-xl bg-bg-tertiary/40 overflow-hidden max-h-40 overflow-y-auto">
+              {payoutsList.map((pay) => (
                 <div key={pay.id} className="p-3.5 flex justify-between items-center text-xs">
                   <div>
                     <span className="font-bold text-text-primary">{pay.id}</span>
@@ -301,6 +412,11 @@ export const MerchantDashboard: React.FC = () => {
                   </div>
                 </div>
               ))}
+              {payoutsList.length === 0 && (
+                <div className="text-center py-6 text-text-secondary">
+                  No past payout settlements recorded.
+                </div>
+              )}
             </div>
           </div>
         </div>

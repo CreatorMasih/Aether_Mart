@@ -43,7 +43,7 @@ export const useAuthStore = create<AuthState>()(
       
       addSavedAddress: (address) => set((state) => ({
         user: state.user 
-          ? { ...state.user, savedAddresses: [...state.user.savedAddresses, address] } 
+          ? { ...state.user, savedAddresses: [...(state.user.savedAddresses || []), address] } 
           : null,
       })),
       

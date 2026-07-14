@@ -9,10 +9,10 @@ export const productsQuerySchema = z.object({
   minPrice: z.string().optional().transform(val => val ? parseFloat(val) : undefined),
   maxPrice: z.string().optional().transform(val => val ? parseFloat(val) : undefined),
   rating: z.string().optional().transform(val => val ? parseFloat(val) : undefined),
-  discount: z.string().optional().transform(val => val === 'true'),
-  organic: z.string().optional().transform(val => val === 'true'),
-  vegetarian: z.string().optional().transform(val => val === 'true'),
-  inStock: z.string().optional().transform(val => val === 'true'),
+  discount: z.string().optional().transform(val => val === undefined ? undefined : val === 'true'),
+  organic: z.string().optional().transform(val => val === undefined ? undefined : val === 'true'),
+  vegetarian: z.string().optional().transform(val => val === undefined ? undefined : val === 'true'),
+  inStock: z.string().optional().transform(val => val === undefined ? undefined : val === 'true'),
   storeId: z.string().optional(),
   
   // Geolocation parameters for distance filtering

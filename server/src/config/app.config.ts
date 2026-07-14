@@ -48,7 +48,7 @@ export function createApp(): Application {
       },
       credentials: true, // Required for withCredentials (refresh token cookie)
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Idempotency-Key'],
       exposedHeaders: ['X-Total-Count', 'X-Rate-Limit-Remaining'],
     })
   );

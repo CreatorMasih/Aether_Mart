@@ -18,14 +18,12 @@ export class AuthService extends BaseRepository {
    */
   public async sendOtp(request: OtpSendRequest): Promise<boolean> {
     return this.executeRequest(async () => {
-      // Simulate real HTTP endpoint trigger
-      if (import.meta.env.VITE_APP_ENV === 'development') {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        console.log(`[Mock SMS/Email Provider] OTP delivered to: ${request.identifier}`);
-        return true;
+      interface SendOtpResponse {
+        success: boolean;
+        data: null;
+        message: string;
       }
-      
-      const response = await this.client.post<{ success: boolean }>(
+      const response = await this.client.post<SendOtpResponse>(
         API_ENDPOINTS.auth.login, 
         request
       );
@@ -38,66 +36,78 @@ export class AuthService extends BaseRepository {
    */
   public async verifyOtp(request: OtpVerifyRequest): Promise<AuthResponseDTO> {
     return this.executeRequest(async () => {
-      if (import.meta.env.VITE_APP_ENV === 'development') {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        
-        // Mock User Profile details
-        const mockUser: User = {
-          id: `usr-${Math.random().toString(36).substring(2, 9)}`,
-          phone: request.method === 'PHONE' ? request.identifier : '+91 99999 99999',
-          email: request.method === 'EMAIL' ? request.identifier : undefined,
-          fullName: undefined, // Enforces profile completion setup flow
-          role: request.role,
-          walletBalance: 0,
-          savedAddresses: [],
-        };
-        
-        return {
-          token: 'mock-jwt-access-token-string',
-          user: mockUser,
-        };
+      interface BackendResponse<T> {
+        success: boolean;
+        data: T;
+        message: string;
       }
-
-      const response = await this.client.post<AuthResponseDTO>(
+      const response = await this.client.post<BackendResponse<AuthResponseDTO>>(
         API_ENDPOINTS.auth.verifyOtp, 
         request
       );
-      return response.data;
+      return response.data.data;
+    });
+  }
+
+  /**
+   * Retrieves active authenticated user details
+   */
+  public async getCurrentUser(): Promise<User> {
+    return this.executeRequest(async () => {
+      interface BackendResponse<T> {
+        success: boolean;
+        data: T;
+        message: string;
+      }
+      const response = await this.client.get<BackendResponse<User>>(
+        API_ENDPOINTS.auth.me
+      );
+      return response.data.data;
     });
   }
 
   /**
    * Finalizes user details completion flow
    */
-  public async completeProfile(request: ProfileCompletionRequest, userId: string, phone: string, email?: string): Promise<User> {
+  public async completeProfile(request: ProfileCompletionRequest, _userId: string, _phone: string, _email?: string): Promise<User> {
     return this.executeRequest(async () => {
-      if (import.meta.env.VITE_APP_ENV === 'development') {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        
-        // Construct complete User profile
-        const completedUser: User = {
-          id: userId,
-          phone,
-          email: email || (request.role === 'CUSTOMER' ? request.customerDetails?.email : request.role === 'SHOPKEEPER' ? request.merchantDetails?.email : request.riderDetails?.email),
-          fullName: request.role === 'CUSTOMER' ? request.customerDetails?.fullName : request.role === 'SHOPKEEPER' ? request.merchantDetails?.fullName : request.riderDetails?.fullName,
-          role: request.role,
-          walletBalance: 50, // Initial sign-up bonus!
-          savedAddresses: request.role === 'CUSTOMER' && request.customerDetails?.defaultAddress ? [
-            {
-              id: 'addr-default',
-              ...request.customerDetails.defaultAddress,
-            }
-          ] : [],
-        };
-        
-        return completedUser;
+      interface BackendResponse<T> {
+        success: boolean;
+        data: T;
+        message: string;
       }
 
-      const response = await this.client.post<User>(
-        API_ENDPOINTS.customer.profile, 
-        request
+      // Translate coordinates to flat fields for backend schema mapping
+      const payload: any = { role: request.role };
+      if (request.role === 'CUSTOMER' && request.customerDetails) {
+        payload.customerDetails = {
+          fullName: request.customerDetails.fullName,
+          email: request.customerDetails.email,
+        };
+        if (request.customerDetails.defaultAddress) {
+          const { coordinates, ...rest } = request.customerDetails.defaultAddress;
+          payload.customerDetails.defaultAddress = {
+            ...rest,
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+          };
+        }
+      } else if (request.role === 'SHOPKEEPER' && request.merchantDetails) {
+        const { coordinates, ...rest } = request.merchantDetails;
+        payload.merchantDetails = {
+          ...rest,
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+        };
+      } else if (request.role === 'RIDER' && request.riderDetails) {
+        payload.riderDetails = request.riderDetails;
+      }
+
+      const response = await this.client.post<BackendResponse<User>>(
+        API_ENDPOINTS.auth.completeProfile, 
+        payload
       );
-      return response.data;
+      return response.data.data;
     });
   }
 
@@ -106,12 +116,30 @@ export class AuthService extends BaseRepository {
    */
   public async logout(): Promise<boolean> {
     return this.executeRequest(async () => {
-      if (import.meta.env.VITE_APP_ENV === 'development') {
-        return true;
+      interface BackendResponse<T> {
+        success: boolean;
+        data: T;
+        message: string;
       }
-      
-      const response = await this.client.post<{ success: boolean }>(
+      const response = await this.client.post<BackendResponse<any>>(
         API_ENDPOINTS.auth.logout
+      );
+      return response.data.success;
+    });
+  }
+
+  /**
+   * Revokes all active tokens/sessions across all devices
+   */
+  public async logoutAll(): Promise<boolean> {
+    return this.executeRequest(async () => {
+      interface BackendResponse<T> {
+        success: boolean;
+        data: T;
+        message: string;
+      }
+      const response = await this.client.post<BackendResponse<any>>(
+        '/auth/logout-all'
       );
       return response.data.success;
     });

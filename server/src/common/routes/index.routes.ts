@@ -15,8 +15,8 @@ import authRoutes from '../../modules/auth/auth.routes';
 router.use('/auth', authRoutes);
 
 // ── Customer (Phase 3-5) ──────────────────────────────────────────────────────
-// import customerRoutes from '../../modules/users/users.routes';
-// router.use('/customer', customerRoutes);
+import customerRoutes from '../../modules/customer/customer.routes';
+router.use('/customer', customerRoutes);
 
 // ── Catalog (Phase 4) ─────────────────────────────────────────────────────────
 import catalogRoutes from '../../modules/catalog/catalog.routes';

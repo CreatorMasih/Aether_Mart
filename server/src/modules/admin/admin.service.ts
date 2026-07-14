@@ -341,6 +341,40 @@ export class AdminService {
   public async getCategoryAnalytics(): Promise<any[]> {
     return adminRepository.calculateCategoryAnalytics();
   }
+
+  public async getAuditLogs(
+    query: { page?: number; limit?: number }
+  ): Promise<any> {
+    const page = Math.max(1, Number(query.page || 1));
+    const limit = Math.max(1, Math.min(100, Number(query.limit || 10)));
+    return adminRepository.findAuditLogs({ page, limit });
+  }
+
+  public async updateMerchantCommission(
+    adminUserId: string,
+    merchantId: string,
+    commissionRatePercentage: number,
+    ipAddress: string
+  ): Promise<any> {
+    const merchant = await adminRepository.findMerchantById(merchantId);
+    if (!merchant) throw new NotFoundError('Merchant profile');
+
+    const updated = await adminRepository.updateStoreCommission(merchantId, commissionRatePercentage);
+
+    // Audit log
+    await adminRepository.logAction({
+      userId: adminUserId,
+      action: 'MERCHANT_COMMISSION_UPDATE',
+      targetType: 'Merchant',
+      targetId: merchantId,
+      beforeValue: { commissionRate: merchant.store ? merchant.store.commissionRate : undefined },
+      afterValue: { commissionRate: commissionRatePercentage / 100 },
+      ipAddress,
+    });
+
+    log.info(`Admin ${adminUserId} adjusted commission rate for Merchant ${merchantId} to ${commissionRatePercentage}%`);
+    return updated;
+  }
 }
 
 export const adminService = new AdminService();

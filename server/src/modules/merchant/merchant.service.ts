@@ -34,6 +34,10 @@ export class MerchantService {
       openingTime?: string;
       closingTime?: string;
       isHoliday?: boolean;
+      minimumOrderValue?: number;
+      deliveryFee?: number;
+      bankAccount?: string;
+      bankName?: string;
     }
   ): Promise<any> {
     const merchant = await merchantRepository.findMerchantByUserId(userId);
@@ -48,6 +52,8 @@ export class MerchantService {
           gstNumber: params.gstNumber,
           panNumber: params.panNumber,
           fssaiNumber: params.fssaiNumber,
+          bankAccount: params.bankAccount,
+          bankName: params.bankName,
         },
       });
 
@@ -65,6 +71,8 @@ export class MerchantService {
             openingTime: params.openingTime,
             closingTime: params.closingTime,
             isHoliday: params.isHoliday,
+            minimumOrderValue: params.minimumOrderValue,
+            deliveryFee: params.deliveryFee,
           },
         });
       }
@@ -501,6 +509,108 @@ export class MerchantService {
     });
 
     return assignment;
+  }
+
+  /**
+   * Retrieves dashboard statistics and analytics for a merchant.
+   */
+  public async getDashboardStats(userId: string): Promise<any> {
+    const store = await merchantRepository.findStoreByUserId(userId);
+    if (!store) throw new NotFoundError('Associated Store not found');
+
+    const orders = await merchantRepository.prisma.order.findMany({
+      where: { storeId: store.id },
+      include: { items: true },
+    });
+
+    const products = await merchantRepository.prisma.product.findMany({
+      where: { storeId: store.id, deletedAt: null },
+      include: { variants: true },
+    });
+
+    // 1. Calculations
+    const deliveredOrders = orders.filter((o) => o.status === 'DELIVERED');
+    const totalRevenue = deliveredOrders.reduce((acc, curr) => acc + curr.totalAmount, 0);
+
+    const completedOrdersCount = deliveredOrders.length;
+    const activeOrdersCount = orders.filter((o) => 
+      ['PLACED', 'CONFIRMED', 'PACKING', 'READY_FOR_PICKUP'].includes(o.status)
+    ).length;
+
+    // Calculate stock levels
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+
+    for (const prod of products) {
+      const stock = prod.variants.reduce((acc, v) => acc + v.stock, 0);
+      if (stock === 0) {
+        outOfStockCount++;
+      } else if (stock > 0 && stock <= 5) {
+        lowStockCount++;
+      }
+    }
+
+    // 2. Order Volume Chart data (group by hour ranges)
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const todayOrders = orders.filter((o) => new Date(o.createdAt) >= startOfToday);
+
+    const chartData = [
+      { label: '08:00', val: todayOrders.filter((o) => {
+        const hour = new Date(o.createdAt).getHours();
+        return hour >= 5 && hour < 9;
+      }).length },
+      { label: '11:00', val: todayOrders.filter((o) => {
+        const hour = new Date(o.createdAt).getHours();
+        return hour >= 9 && hour < 12;
+      }).length },
+      { label: '14:00', val: todayOrders.filter((o) => {
+        const hour = new Date(o.createdAt).getHours();
+        return hour >= 12 && hour < 15;
+      }).length },
+      { label: '17:00', val: todayOrders.filter((o) => {
+        const hour = new Date(o.createdAt).getHours();
+        return hour >= 15 && hour < 18;
+      }).length },
+      { label: '20:00', val: todayOrders.filter((o) => {
+        const hour = new Date(o.createdAt).getHours();
+        return hour >= 18 && hour < 21;
+      }).length },
+      { label: '23:00', val: todayOrders.filter((o) => {
+        const hour = new Date(o.createdAt).getHours();
+        return hour >= 21 || hour < 5;
+      }).length },
+    ];
+
+    return {
+      totalRevenue,
+      completedOrdersCount,
+      activeOrdersCount,
+      lowStockCount,
+      outOfStockCount,
+      chartData,
+    };
+  }
+
+  /**
+   * Retrieves payout settlement logs for a merchant.
+   */
+  public async getPayouts(userId: string): Promise<any[]> {
+    const merchant = await merchantRepository.findMerchantByUserId(userId);
+    if (!merchant) throw new NotFoundError('Merchant Profile');
+
+    const payouts = await merchantRepository.prisma.payout.findMany({
+      where: { merchantId: merchant.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return payouts.map((p) => ({
+      id: p.id.substring(0, 8).toUpperCase(),
+      date: p.createdAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      amount: p.amount,
+      status: p.status,
+    }));
   }
 }
 

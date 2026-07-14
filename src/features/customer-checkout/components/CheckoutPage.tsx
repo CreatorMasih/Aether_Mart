@@ -1,47 +1,97 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  MapPin, 
-  Calendar, 
-  CreditCard, 
-  ShieldCheck, 
-  ArrowRight, 
-  Plus, 
-  Loader2, 
-  Check
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { v4 as uuidv4 } from 'uuid';
+import {
+  MapPin,
+  Calendar,
+  CreditCard,
+  Tag,
+  ShieldCheck,
+  ArrowRight,
+  Plus,
+  Loader2,
+  Check,
+  AlertCircle,
+  X,
 } from 'lucide-react';
-import { useCartStore } from '../store/cart-store';
-import { useCustomerStore } from '../../customer-catalog/store/customer-store';
+import { queryKeys } from '../../../core/network/queryKeys';
+import { cartService } from '../services/cart-service';
+import { orderService } from '../services/order-service';
+import { apiClient } from '../../../core/network/api-client';
+import { useCartMutations } from '../hooks/useCartMutations';
 import { useAuthStore } from '../../auth/store/auth-store';
 import { useToast } from '../../../hooks/useToast';
 import { formatCurrency } from '../../../utils/formatters';
-import { PLATFORM_CONFIG } from '../../../core/config/constants';
+import { parseApiError } from '../../../core/network/api-error-parser';
 import { cn } from '../../../utils/cn';
 import { pageTransition } from '../../../core/theme/animations';
-import type { Address } from '../../../types';
+import type { Address, PaymentMethod, CartData, PricingData } from '../../../types';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type DeliverySlot = 'EXPRESS' | 'STANDARD' | 'SCHEDULED';
+
+interface CheckoutLocationState {
+  appliedCoupon?: { code: string; discount: number } | null;
+  driverTip?: number;
+  ecoPackaging?: boolean;
+  replaceUnavailable?: boolean;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const EMPTY_PRICING: PricingData = {
+  store: null,
+  items: [],
+  subtotal: 0,
+  discount: 0,
+  tax: 0,
+  packagingFee: 0,
+  handlingFee: 0,
+  deliveryFee: 0,
+  surgeFee: 0,
+  driverTip: 0,
+  ecoPackaging: false,
+  totalWeightGrams: 0,
+  totalAmount: 0,
+  coupon: null,
+};
+
+const EMPTY_CART: CartData = {
+  id: null,
+  store: null,
+  items: [],
+  subtotal: 0,
+  discount: 0,
+  tax: 0,
+  packagingFee: 0,
+  handlingFee: 0,
+  deliveryFee: 0,
+  surgeFee: 0,
+  driverTip: 0,
+  ecoPackaging: false,
+  totalAmount: 0,
+  coupon: null,
+};
 
 export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { showToast } = useToast();
-  
-  const { user, addSavedAddress } = useAuthStore();
-  const { selectedAddress, setSelectedAddress } = useCustomerStore();
-  const { items, getCartSubtotal, clearCart } = useCartStore();
 
-  // Onboarding States
-  const [selectedSlot, setSelectedSlot] = useState<'EXPRESS' | 'STANDARD' | 'SCHEDULED'>('EXPRESS');
-  const [scheduledTime, setScheduledTime] = useState('Tomorrow, 9 AM - 11 AM');
-  
-  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CARD' | 'NET_BANKING' | 'COD'>('UPI');
-  const [selectedUpiApp, setSelectedUpiApp] = useState('GPAY');
-  
-  // New Card form states
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
-  
-  // Address Modal form states
+  // State passed from cart drawer
+  const locationState = (location.state ?? {}) as CheckoutLocationState;
+
+  const { user, addSavedAddress } = useAuthStore();
+  const { clearCart } = useCartMutations();
+
+  // ─── Address selection ────────────────────────────────────────────────────
+  const savedAddresses: Address[] = user?.savedAddresses ?? [];
+  const [selectedAddress, setSelectedAddress] = useState<Address | null>(
+    savedAddresses[0] ?? null,
+  );
   const [showAddAddressModal, setShowAddAddressModal] = useState(false);
   const [newAddrLabel, setNewAddrLabel] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [newAddrStreet, setNewAddrStreet] = useState('');
@@ -49,109 +99,226 @@ export const CheckoutPage: React.FC = () => {
   const [newAddrCity, setNewAddrCity] = useState('');
   const [newAddrLandmark, setNewAddrLandmark] = useState('');
 
-  // Payment Sim Loader
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  // ─── Delivery slot ────────────────────────────────────────────────────────
+  const [selectedSlot, setSelectedSlot] = useState<DeliverySlot>('EXPRESS');
+  const [scheduledTime, setScheduledTime] = useState('Tomorrow, 9 AM - 11 AM');
 
-  const savedAddresses = user?.savedAddresses || [];
-  const activeAddress = selectedAddress || savedAddresses[0] || null;
+  // ─── Payment ──────────────────────────────────────────────────────────────
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('COD');
 
-  // Bill Totals Calculations
-  const subtotal = getCartSubtotal();
-  const isFreeDelivery = subtotal >= PLATFORM_CONFIG.freeDeliveryThreshold;
-  
-  const deliveryFee = selectedSlot === 'EXPRESS' 
-    ? (isFreeDelivery ? 10 : 25) 
-    : (isFreeDelivery ? 0 : 15);
-    
-  const packagingFee = 15;
-  const platformFee = PLATFORM_CONFIG.handlingFee;
-  const surgeFee = PLATFORM_CONFIG.surgeFee;
-  
-  const tax = parseFloat(((subtotal + deliveryFee + packagingFee + platformFee + surgeFee) * 0.18).toFixed(2));
-  const grandTotal = subtotal + deliveryFee + packagingFee + platformFee + surgeFee + tax;
+  // ─── Coupon (carried from cart drawer) ────────────────────────────────────
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(
+    locationState.appliedCoupon ?? null,
+  );
+  const [couponInput, setCouponInput] = useState('');
 
-  const handleAddNewAddress = (e: React.FormEvent) => {
+  // ─── Delivery instruction ─────────────────────────────────────────────────
+  const [deliveryInstruction, setDeliveryInstruction] = useState('');
+
+  // ─── Eco / Tip (carried from cart drawer) ─────────────────────────────────
+  const ecoPackaging = locationState.ecoPackaging ?? false;
+  const driverTip = locationState.driverTip ?? 0;
+
+  // ─── Idempotency key (generated per checkout attempt) ─────────────────────
+  const [idempotencyKey] = useState<string>(() => uuidv4());
+
+  // ─── Fetch cart (to build recalculate items) ──────────────────────────────
+  const { data: cart = EMPTY_CART } = useQuery({
+    queryKey: queryKeys.cart(),
+    queryFn: () => cartService.getCart(),
+    staleTime: 30_000,
+  });
+
+  // ─── Build recalculate params ─────────────────────────────────────────────
+  const recalcParams = useMemo(() => {
+    const items = cart.items.map((i) => ({
+      productId: i.productId,
+      variantId: i.variantId ?? undefined,
+      quantity: i.quantity,
+    }));
+    return {
+      items,
+      couponCode: appliedCoupon?.code,
+      driverTip,
+      ecoPackaging,
+      deliveryLatitude: selectedAddress?.coordinates?.latitude,
+      deliveryLongitude: selectedAddress?.coordinates?.longitude,
+    };
+  }, [cart.items, appliedCoupon, driverTip, ecoPackaging, selectedAddress]);
+
+  // ─── POST /cart/recalculate — backend pricing (source of truth) ───────────
+  const {
+    data: pricing = EMPTY_PRICING,
+    isFetching: isPricingLoading,
+  } = useQuery({
+    queryKey: queryKeys.cartRecalculate(recalcParams as Record<string, unknown>),
+    queryFn: () => cartService.recalculate(recalcParams),
+    enabled: cart.items.length > 0,
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  // ─── Validate coupon via backend ──────────────────────────────────────────
+  const couponMutation = useMutation({
+    mutationFn: ({ code, subtotal }: { code: string; subtotal: number }) =>
+      cartService.validateCoupon(code, subtotal),
+    onSuccess: (coupon, { code }) => {
+      const discount =
+        coupon.type === 'PERCENTAGE'
+          ? Math.min((pricing.subtotal * coupon.value) / 100, coupon.maxDiscount ?? Infinity)
+          : coupon.value;
+      setAppliedCoupon({ code, discount });
+      setCouponInput('');
+      showToast({
+        type: 'success',
+        title: 'Coupon Applied!',
+        description: `${code} saves you ${formatCurrency(discount)}.`,
+      });
+    },
+    onError: (err) => {
+      const parsed = parseApiError(err);
+      let description = parsed.message;
+      if (parsed.code === 'COUPON_EXPIRED') description = 'This coupon has expired.';
+      else if (parsed.code === 'COUPON_INVALID') description = 'Invalid coupon code.';
+      else if (parsed.code === 'COUPON_LIMIT_REACHED')
+        description = 'You have already used this coupon.';
+      showToast({ type: 'error', title: 'Coupon Failed', description });
+    },
+  });
+
+  // ─── Place Order ──────────────────────────────────────────────────────────
+  const placeOrderMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedAddress?.id) throw new Error('No address selected');
+      return orderService.placeOrder(
+        {
+          addressId: selectedAddress.id,
+          paymentMethod,
+          couponCode: appliedCoupon?.code,
+          driverTip,
+          ecoPackaging,
+          deliveryInstruction: deliveryInstruction || undefined,
+        },
+        idempotencyKey,
+      );
+    },
+    onSuccess: (orders) => {
+      // Clear cart optimistically
+      clearCart();
+      const primaryOrder = orders[0];
+      navigate('/c/orders/confirm', {
+        replace: true,
+        state: { orderId: primaryOrder?.id, status: 'success' },
+      });
+    },
+    onError: (err) => {
+      const parsed = parseApiError(err);
+      let title = 'Order Failed';
+      let description = parsed.message;
+
+      switch (parsed.code) {
+        case 'OUT_OF_STOCK':
+          title = 'Out of Stock';
+          description = 'Some items are no longer available. Please update your cart.';
+          break;
+        case 'STORE_CLOSED':
+          title = 'Store Closed';
+          description = parsed.message;
+          break;
+        case 'CART_EMPTY':
+          title = 'Cart Empty';
+          description = 'Your cart is empty. Please add items before placing an order.';
+          break;
+        case 'PAYMENT_FAILED':
+          title = 'Payment Failed';
+          description = 'Your payment could not be processed. Please try again.';
+          break;
+        default:
+          break;
+      }
+
+      showToast({ type: 'error', title, description });
+    },
+  });
+
+  // ─── Add address (real backend Address CRUD API) ───────────────────────────
+  const handleAddNewAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAddrStreet || !newAddrZip || !newAddrCity) {
       showToast({
         type: 'error',
         title: 'Form Incomplete',
-        description: 'Please fill in the street address, PIN code, and city.',
+        description: 'Please fill in street address, PIN code, and city.',
       });
       return;
     }
 
-    const newAddress: Address = {
-      id: `addr-${Date.now()}`,
-      label: newAddrLabel,
-      receiverName: user?.fullName || 'Customer',
-      receiverPhone: user?.phone || '',
-      streetAddress: `${newAddrStreet}${newAddrLandmark ? `, Near ${newAddrLandmark}` : ''}`,
-      postalCode: newAddrZip,
-      city: newAddrCity,
-      coordinates: { latitude: 12.9716, longitude: 77.5946 },
-    };
+    try {
+      const response = await apiClient.post('/customer/addresses', {
+        label: newAddrLabel,
+        receiverName: user?.fullName || 'Customer',
+        receiverPhone: user?.phone || '',
+        streetAddress: `${newAddrStreet}${newAddrLandmark ? `, Near ${newAddrLandmark}` : ''}`,
+        postalCode: newAddrZip,
+        city: newAddrCity,
+        latitude: 12.9716,
+        longitude: 77.5946,
+      });
 
-    addSavedAddress(newAddress);
-    setSelectedAddress(newAddress);
-    setShowAddAddressModal(false);
-    showToast({
-      type: 'success',
-      title: 'Address Registered',
-      description: 'Address added to your account profile.',
-    });
+      const newAddress = response.data.data;
 
-    // Reset Form
-    setNewAddrStreet('');
-    setNewAddrZip('');
-    setNewAddrCity('');
-    setNewAddrLandmark('');
+      addSavedAddress(newAddress);
+      setSelectedAddress(newAddress);
+      setShowAddAddressModal(false);
+      showToast({ type: 'success', title: 'Address Added', description: 'Delivery address saved.' });
+
+      setNewAddrStreet('');
+      setNewAddrZip('');
+      setNewAddrCity('');
+      setNewAddrLandmark('');
+    } catch (err: any) {
+      const parsed = parseApiError(err);
+      showToast({
+        type: 'error',
+        title: 'Failed to Save Address',
+        description: parsed.message,
+      });
+    }
   };
 
-  const handlePlaceOrder = () => {
-    if (!activeAddress) {
+  const handlePlaceOrder = useCallback(() => {
+    if (!selectedAddress) {
       showToast({
         type: 'error',
         title: 'Address Required',
-        description: 'Please select or add a delivery address to complete your order.',
+        description: 'Please select a delivery address.',
       });
       return;
     }
-
-    if (paymentMethod === 'CARD' && (!cardNumber || !cardExpiry || !cardCvv)) {
+    if (cart.items.length === 0) {
       showToast({
         type: 'error',
-        title: 'Card Details Required',
-        description: 'Please enter your credit/debit card credentials.',
+        title: 'Cart Empty',
+        description: 'Your cart is empty. Please add items.',
       });
       return;
     }
+    placeOrderMutation.mutate();
+  }, [selectedAddress, cart.items.length, placeOrderMutation, showToast]);
 
-    setIsProcessingPayment(true);
-
-    // Simulate payment processing (2.5 seconds)
-    setTimeout(() => {
-      setIsProcessingPayment(false);
-      
-      // 90% chance of success, 10% failure simulation
-      const isSuccess = Math.random() > 0.1;
-
-      if (isSuccess) {
-        clearCart();
-        navigate('/c/orders/confirm?status=success');
-      } else {
-        navigate('/c/orders/confirm?status=failed');
-      }
-    }, 2500);
-  };
-
-  if (items.length === 0) {
+  // ─── Empty cart guard ─────────────────────────────────────────────────────
+  if (cart.items.length === 0 && !placeOrderMutation.isPending) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-center space-y-4 select-none">
         <span className="text-5xl">🛒</span>
-        <h2 className="text-lg font-bold text-text-primary font-heading">Empty Checkout Cart</h2>
-        <p className="text-xs text-text-secondary max-w-xs">You have no active products configured in your checkout bag.</p>
-        <button onClick={() => navigate('/c/home')} className="px-4 py-2.5 bg-brand-emerald text-white font-bold text-xs rounded-xl cursor-pointer">
+        <h2 className="text-lg font-bold text-text-primary font-heading">Empty Cart</h2>
+        <p className="text-xs text-text-secondary max-w-xs">
+          Your cart is empty. Please add items before checking out.
+        </p>
+        <button
+          onClick={() => navigate('/c/home')}
+          className="px-4 py-2.5 bg-brand-emerald text-white font-bold text-xs rounded-xl cursor-pointer"
+        >
           Browse Storefront
         </button>
       </div>
@@ -166,14 +333,14 @@ export const CheckoutPage: React.FC = () => {
       exit="exit"
       className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12 select-none"
     >
-      {/* Left 2 columns: Checkout settings */}
+      {/* Left Column */}
       <div className="lg:col-span-2 space-y-6">
-        
-        {/* 1. Delivery Address block */}
+
+        {/* 1. Delivery Address */}
         <section className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
           <div className="flex items-center justify-between border-b border-border-primary/60 pb-3">
             <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2">
-              <MapPin className="h-4.5 w-4.5 text-brand-emerald" />
+              <MapPin className="h-4 w-4 text-brand-emerald" />
               Delivery Address
             </h2>
             <button
@@ -185,19 +352,25 @@ export const CheckoutPage: React.FC = () => {
             </button>
           </div>
 
+          {/* MISSING API NOTICE */}
+          <div className="text-[10px] text-text-secondary bg-status-warning/10 border border-status-warning/20 rounded-lg px-3 py-2 font-semibold">
+            ⚠️ Address CRUD API not yet available on backend.
+            Addresses are stored locally until <code>POST /customer/addresses</code> is implemented.
+          </div>
+
           {savedAddresses.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {savedAddresses.map((addr) => {
-                const isSelected = activeAddress?.id === addr.id;
+                const isSelected = selectedAddress?.id === addr.id;
                 return (
                   <button
                     key={addr.id}
                     onClick={() => setSelectedAddress(addr)}
                     className={cn(
-                      "text-left p-4 rounded-xl border flex items-start gap-3 transition-all cursor-pointer",
-                      isSelected 
-                        ? "border-brand-emerald bg-brand-emerald/5 text-text-primary" 
-                        : "border-border-primary bg-bg-secondary hover:border-text-secondary"
+                      'text-left p-4 rounded-xl border flex items-start gap-3 transition-all cursor-pointer',
+                      isSelected
+                        ? 'border-brand-emerald bg-brand-emerald/5 text-text-primary'
+                        : 'border-border-primary bg-bg-secondary hover:border-text-secondary',
                     )}
                   >
                     <div className="p-2 rounded-lg bg-bg-tertiary">
@@ -208,7 +381,9 @@ export const CheckoutPage: React.FC = () => {
                         <span className="text-xs font-bold text-text-primary">{addr.label}</span>
                         {isSelected && <Check className="h-3.5 w-3.5 text-brand-emerald" />}
                       </div>
-                      <p className="text-[10px] text-text-secondary mt-1 line-clamp-2">{addr.streetAddress}</p>
+                      <p className="text-[10px] text-text-secondary mt-1 line-clamp-2">
+                        {addr.streetAddress}, {addr.city} — {addr.postalCode}
+                      </p>
                     </div>
                   </button>
                 );
@@ -216,44 +391,45 @@ export const CheckoutPage: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-6 border border-dashed border-border-primary rounded-xl">
-              <p className="text-xs text-text-secondary">No saved addresses. Please add a delivery address.</p>
+              <p className="text-xs text-text-secondary">
+                No saved addresses. Please add a delivery address.
+              </p>
             </div>
           )}
         </section>
 
-        {/* 2. Delivery Slot selector */}
+        {/* 2. Delivery Slot */}
         <section className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
           <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2 border-b border-border-primary/60 pb-3">
-            <Calendar className="h-4.5 w-4.5 text-brand-emerald" />
+            <Calendar className="h-4 w-4 text-brand-emerald" />
             Delivery Speed
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { id: 'EXPRESS', title: 'Express Delivery', eta: '12-18 Mins', fee: isFreeDelivery ? 10 : 25, desc: 'Direct rider assignment' },
-              { id: 'STANDARD', title: 'Standard Delivery', eta: '45 Mins', fee: isFreeDelivery ? 0 : 15, desc: 'Eco bundled drop' },
-              { id: 'SCHEDULED', title: 'Schedule Delivery', eta: 'Choose Slot', fee: 0, desc: 'Pre-book time ranges' }
+              { id: 'EXPRESS', title: 'Express Delivery', eta: '12–18 Mins', desc: 'Direct rider assignment' },
+              { id: 'STANDARD', title: 'Standard Delivery', eta: '45 Mins', desc: 'Eco bundled drop' },
+              { id: 'SCHEDULED', title: 'Schedule Delivery', eta: 'Choose Slot', desc: 'Pre-book time ranges' },
             ].map((slot) => {
               const isSelected = selectedSlot === slot.id;
               return (
                 <button
                   key={slot.id}
-                  onClick={() => setSelectedSlot(slot.id as any)}
+                  onClick={() => setSelectedSlot(slot.id as DeliverySlot)}
                   className={cn(
-                    "text-left p-4 rounded-xl border flex flex-col justify-between h-28 transition-all cursor-pointer",
-                    isSelected 
-                      ? "border-brand-emerald bg-brand-emerald/5 text-text-primary" 
-                      : "border-border-primary bg-bg-secondary hover:border-text-secondary"
+                    'text-left p-4 rounded-xl border flex flex-col justify-between h-28 transition-all cursor-pointer',
+                    isSelected
+                      ? 'border-brand-emerald bg-brand-emerald/5'
+                      : 'border-border-primary bg-bg-secondary hover:border-text-secondary',
                   )}
                 >
                   <div>
                     <span className="text-xs font-bold block">{slot.title}</span>
-                    <span className="text-[10px] text-text-secondary mt-0.5 block font-semibold">{slot.desc}</span>
+                    <span className="text-[10px] text-text-secondary mt-0.5 block font-semibold">
+                      {slot.desc}
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center w-full mt-2">
-                    <span className="text-[10px] font-bold text-brand-emerald">{slot.eta}</span>
-                    <span className="text-xs font-extrabold font-heading">{slot.fee === 0 ? 'FREE' : `₹${slot.fee}`}</span>
-                  </div>
+                  <span className="text-[10px] font-bold text-brand-emerald">{slot.eta}</span>
                 </button>
               );
             })}
@@ -261,193 +437,237 @@ export const CheckoutPage: React.FC = () => {
 
           {selectedSlot === 'SCHEDULED' && (
             <div className="p-3 bg-bg-tertiary rounded-xl border border-border-primary/60">
-              <label htmlFor="scheduledTime" className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block mb-1.5">Select Delivery Window</label>
+              <label
+                htmlFor="scheduledTime"
+                className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block mb-1.5"
+              >
+                Select Delivery Window
+              </label>
               <select
                 id="scheduledTime"
                 value={scheduledTime}
                 onChange={(e) => setScheduledTime(e.target.value)}
                 className="w-full bg-bg-secondary border border-border-primary rounded-lg p-2 text-xs font-semibold"
               >
-                <option value="Tomorrow, 9 AM - 11 AM">Tomorrow, 9 AM - 11 AM</option>
-                <option value="Tomorrow, 11 AM - 1 PM">Tomorrow, 11 AM - 1 PM</option>
-                <option value="Tomorrow, 4 PM - 6 PM">Tomorrow, 4 PM - 6 PM</option>
-                <option value="Tomorrow, 6 PM - 8 PM">Tomorrow, 6 PM - 8 PM</option>
+                <option>Tomorrow, 9 AM – 11 AM</option>
+                <option>Tomorrow, 11 AM – 1 PM</option>
+                <option>Tomorrow, 4 PM – 6 PM</option>
+                <option>Tomorrow, 6 PM – 8 PM</option>
               </select>
             </div>
           )}
         </section>
 
-        {/* 3. Payment Method block */}
-        <section className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
+        {/* 3. Coupon */}
+        <section className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-3">
           <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2 border-b border-border-primary/60 pb-3">
-            <CreditCard className="h-4.5 w-4.5 text-brand-emerald" />
-            Select Payment Method
+            <Tag className="h-4 w-4 text-brand-emerald" />
+            Promo Code
           </h2>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { id: 'UPI', label: 'UPI / Apps' },
-              { id: 'CARD', label: 'Credit/Debit' },
-              { id: 'NET_BANKING', label: 'Net Banking' },
-              { id: 'COD', label: 'Cash on Delivery' }
-            ].map((pm) => {
+          {appliedCoupon ? (
+            <div className="flex items-center justify-between p-3 bg-brand-emerald/5 border border-brand-emerald/20 rounded-xl">
+              <p className="text-xs text-brand-emerald font-bold flex items-center gap-1.5">
+                <Check className="h-4 w-4" />
+                {appliedCoupon.code} — saves {formatCurrency(appliedCoupon.discount)}
+              </p>
+              <button
+                onClick={() => setAppliedCoupon(null)}
+                className="text-[10px] text-status-error font-bold hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <X className="h-3.5 w-3.5" /> Remove
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (couponInput.trim())
+                  couponMutation.mutate({
+                    code: couponInput.trim().toUpperCase(),
+                    subtotal: pricing.subtotal,
+                  });
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                placeholder="Enter promo code"
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value)}
+                className="flex-1 px-4 py-2 border border-border-primary rounded-xl text-xs font-semibold bg-bg-tertiary focus:outline-none focus:ring-2 focus:ring-brand-emerald/20 focus:border-brand-emerald uppercase"
+              />
+              <button
+                type="submit"
+                disabled={couponMutation.isPending || !couponInput.trim()}
+                className="px-4 py-2 bg-text-primary text-bg-secondary text-xs font-bold rounded-xl cursor-pointer disabled:opacity-60 flex items-center gap-1"
+              >
+                {couponMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  'APPLY'
+                )}
+              </button>
+            </form>
+          )}
+        </section>
+
+        {/* 4. Delivery Instruction */}
+        <section className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-3">
+          <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading border-b border-border-primary/60 pb-3">
+            Delivery Instructions (Optional)
+          </h2>
+          <textarea
+            rows={2}
+            placeholder="E.g. Leave at gate, call before arriving…"
+            value={deliveryInstruction}
+            onChange={(e) => setDeliveryInstruction(e.target.value)}
+            className="w-full px-4 py-2.5 border border-border-primary rounded-xl text-xs font-semibold bg-bg-tertiary resize-none focus:outline-none focus:ring-2 focus:ring-brand-emerald/20"
+          />
+        </section>
+
+        {/* 5. Payment Method — aligned to backend enum */}
+        <section className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
+          <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2 border-b border-border-primary/60 pb-3">
+            <CreditCard className="h-4 w-4 text-brand-emerald" />
+            Payment Method
+          </h2>
+
+          <div className="grid grid-cols-3 gap-3">
+            {(
+              [
+                { id: 'COD', label: 'Cash on Delivery', note: 'Pay rider on arrival' },
+                { id: 'WALLET', label: 'Wallet', note: `Balance: ${formatCurrency(user?.walletBalance ?? 0)}` },
+                { id: 'RAZORPAY', label: 'Online Pay', note: 'Cards, UPI, Net Banking' },
+              ] as { id: PaymentMethod; label: string; note: string }[]
+            ).map((pm) => {
               const isSelected = paymentMethod === pm.id;
               return (
                 <button
                   key={pm.id}
-                  onClick={() => setPaymentMethod(pm.id as any)}
+                  onClick={() => setPaymentMethod(pm.id)}
                   className={cn(
-                    "py-3.5 text-center text-xs font-bold rounded-xl border transition-all cursor-pointer",
-                    isSelected 
-                      ? "border-brand-emerald bg-brand-emerald/5 text-brand-emerald" 
-                      : "border-border-primary bg-bg-secondary hover:border-text-secondary"
+                    'text-left py-4 px-3 rounded-xl border flex flex-col gap-1 transition-all cursor-pointer',
+                    isSelected
+                      ? 'border-brand-emerald bg-brand-emerald/5 text-brand-emerald'
+                      : 'border-border-primary bg-bg-secondary hover:border-text-secondary',
                   )}
                 >
-                  {pm.label}
+                  <span className="text-xs font-bold">{pm.label}</span>
+                  <span className="text-[10px] text-text-secondary font-semibold">{pm.note}</span>
+                  {isSelected && <Check className="h-3.5 w-3.5 text-brand-emerald mt-1" />}
                 </button>
               );
             })}
           </div>
 
-          <div className="p-4 rounded-xl bg-bg-tertiary border border-border-primary/60">
-            {paymentMethod === 'UPI' && (
-              <div className="space-y-3">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">UPI Application</label>
-                <div className="flex flex-wrap gap-2.5">
-                  {[
-                    { id: 'GPAY', label: 'Google Pay' },
-                    { id: 'PHONEPE', label: 'PhonePe' },
-                    { id: 'PAYTM', label: 'Paytm Wallet' }
-                  ].map((app) => {
-                    const isSelected = selectedUpiApp === app.id;
-                    return (
-                      <button
-                        key={app.id}
-                        type="button"
-                        onClick={() => setSelectedUpiApp(app.id)}
-                        className={cn(
-                          "px-4 py-2.5 rounded-lg border text-xs font-bold cursor-pointer transition-all",
-                          isSelected 
-                            ? "border-brand-emerald bg-bg-secondary text-brand-emerald" 
-                            : "border-border-primary bg-bg-secondary text-text-secondary hover:text-text-primary"
-                        )}
-                      >
-                        {app.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+          {paymentMethod === 'WALLET' && (user?.walletBalance ?? 0) < pricing.totalAmount && (
+            <div className="flex items-center gap-2 p-3 bg-status-warning/10 border border-status-warning/20 rounded-xl text-xs font-semibold text-status-warning">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              Insufficient wallet balance. Please top up or choose another payment method.
+            </div>
+          )}
 
-            {paymentMethod === 'CARD' && (
-              <div className="space-y-3 max-w-sm">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Credit / Debit Card</label>
-                <div className="space-y-2.5">
-                  <input
-                    type="text"
-                    placeholder="Card Number (4111 2222 3333 4444)"
-                    value={cardNumber}
-                    onChange={(e) => setCardNumber(e.target.value)}
-                    maxLength={16}
-                    className="w-full px-4 py-2.5 border border-border-primary rounded-xl text-xs font-semibold bg-bg-secondary"
-                  />
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <input
-                      type="text"
-                      placeholder="MM/YY"
-                      value={cardExpiry}
-                      onChange={(e) => setCardExpiry(e.target.value)}
-                      maxLength={5}
-                      className="px-4 py-2.5 border border-border-primary rounded-xl text-xs font-semibold bg-bg-secondary"
-                    />
-                    <input
-                      type="password"
-                      placeholder="CVV"
-                      value={cardCvv}
-                      onChange={(e) => setCardCvv(e.target.value)}
-                      maxLength={3}
-                      className="px-4 py-2.5 border border-border-primary rounded-xl text-xs font-semibold bg-bg-secondary"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+          {paymentMethod === 'RAZORPAY' && (
+            <div className="text-[10px] text-text-secondary font-semibold p-3 bg-bg-tertiary rounded-xl border border-border-primary/60">
+              You will be redirected to the Razorpay payment gateway to complete your payment securely.
+            </div>
+          )}
 
-            {paymentMethod === 'NET_BANKING' && (
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Popular Banks</label>
-                <select className="w-full bg-bg-secondary border border-border-primary rounded-lg p-2 text-xs font-semibold">
-                  <option>State Bank of India (SBI)</option>
-                  <option>HDFC Bank</option>
-                  <option>ICICI Bank</option>
-                  <option>Axis Bank</option>
-                </select>
-              </div>
-            )}
-
-            {paymentMethod === 'COD' && (
-              <div className="text-xs text-text-secondary leading-relaxed font-semibold">
-                Cash / Pay on Delivery is available. Please pay the rider using cash or any UPI barcode scanner on arrival.
-              </div>
-            )}
-          </div>
-
-          {/* Secure gateway labels */}
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-text-secondary uppercase tracking-wider justify-center">
-            <ShieldCheck className="h-4.5 w-4.5 text-brand-emerald" />
-            PCI-DSS Encrypted Secured Payment Gateway
+            <ShieldCheck className="h-4 w-4 text-brand-emerald" />
+            PCI-DSS Encrypted Secure Gateway
           </div>
         </section>
-
       </div>
 
-      {/* Right Column: Checkout Summary & Action */}
+      {/* Right Column — Order Summary */}
       <div className="space-y-6">
-        
-        {/* Bill summary panel */}
-        <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
-          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary pb-2">Order summary</h3>
-          
-          <div className="space-y-3 text-xs font-semibold text-text-secondary">
-            <div className="flex justify-between">
-              <span>MRP Items Subtotal</span>
-              <span className="text-text-primary font-heading font-extrabold">{formatCurrency(subtotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Delivery charges</span>
-              <span className="text-text-primary font-heading font-extrabold">
-                {deliveryFee === 0 ? 'FREE' : formatCurrency(deliveryFee)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Handling & packaging bags</span>
-              <span className="text-text-primary font-heading font-extrabold">{formatCurrency(packagingFee)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Platform surge fees</span>
-              <span className="text-text-primary font-heading font-extrabold">{formatCurrency(surgeFee + platformFee)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Taxes & Cess (18% GST)</span>
-              <span className="text-text-primary font-heading font-extrabold">{formatCurrency(tax)}</span>
-            </div>
+        <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4 sticky top-20">
+          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary pb-2">
+            Order Summary
+          </h3>
 
-            <div className="border-t border-border-primary/60 pt-3 flex justify-between text-sm font-extrabold text-text-primary">
-              <span>Grand Total</span>
-              <span className="font-heading text-brand-emerald">{formatCurrency(grandTotal)}</span>
-            </div>
+          {/* Items preview */}
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {cart.items.map((item) => (
+              <div
+                key={`${item.productId}-${item.variantId ?? ''}`}
+                className="flex items-center gap-2 text-xs"
+              >
+                <span className="text-text-secondary flex-1 truncate">
+                  {item.name} × {item.quantity}
+                </span>
+                <span className="font-bold text-text-primary shrink-0">
+                  {formatCurrency(item.total)}
+                </span>
+              </div>
+            ))}
           </div>
+
+          {/* Backend-driven pricing */}
+          {isPricingLoading ? (
+            <div className="flex items-center gap-2 text-xs text-text-secondary">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Recalculating prices…
+            </div>
+          ) : (
+            <div className="space-y-3 text-xs font-semibold text-text-secondary">
+              <div className="flex justify-between">
+                <span>MRP Subtotal</span>
+                <span className="text-text-primary font-heading font-extrabold">
+                  {formatCurrency(pricing.subtotal)}
+                </span>
+              </div>
+              {pricing.discount > 0 && (
+                <div className="flex justify-between text-brand-emerald">
+                  <span>Coupon Savings</span>
+                  <span>-{formatCurrency(pricing.discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span>Delivery charges</span>
+                <span className="text-text-primary font-heading font-extrabold">
+                  {pricing.deliveryFee === 0 ? 'FREE' : formatCurrency(pricing.deliveryFee)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Packaging & handling</span>
+                <span className="text-text-primary font-heading font-extrabold">
+                  {formatCurrency(pricing.packagingFee + pricing.handlingFee)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Taxes (GST 5%)</span>
+                <span className="text-text-primary font-heading font-extrabold">
+                  {formatCurrency(pricing.tax)}
+                </span>
+              </div>
+              {driverTip > 0 && (
+                <div className="flex justify-between text-brand-violet">
+                  <span>Rider tip</span>
+                  <span>{formatCurrency(driverTip)}</span>
+                </div>
+              )}
+
+              <div className="border-t border-border-primary/60 pt-3 flex justify-between text-sm font-extrabold text-text-primary">
+                <span>Grand Total</span>
+                <span className="font-heading text-brand-emerald">
+                  {formatCurrency(pricing.totalAmount + driverTip)}
+                </span>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={handlePlaceOrder}
-            disabled={isProcessingPayment}
-            className="w-full py-4 bg-brand-emerald hover:bg-brand-emerald-hover text-white font-bold text-xs rounded-xl shadow-subtle flex items-center justify-center gap-2 cursor-pointer transition-all"
+            disabled={placeOrderMutation.isPending || !selectedAddress || cart.items.length === 0}
+            className="w-full py-4 bg-brand-emerald hover:bg-brand-emerald-hover text-white font-bold text-xs rounded-xl shadow-subtle flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isProcessingPayment ? (
+            {placeOrderMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Securing Payment Gateway...
+                Placing Order…
               </>
             ) : (
               <>
@@ -456,11 +676,17 @@ export const CheckoutPage: React.FC = () => {
               </>
             )}
           </button>
-        </div>
 
+          {placeOrderMutation.isError && (
+            <div className="flex items-center gap-2 p-3 bg-status-error/10 border border-status-error/20 rounded-xl text-xs text-status-error font-semibold">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              {parseApiError(placeOrderMutation.error).message}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Address registration Modal */}
+      {/* Add Address Modal */}
       <AnimatePresence>
         {showAddAddressModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-overlay flex items-center justify-center p-4">
@@ -470,13 +696,16 @@ export const CheckoutPage: React.FC = () => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="w-full max-w-md p-6 rounded-2xl bg-bg-secondary border border-border-primary shadow-high space-y-4"
             >
-              <h3 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">Add Delivery Address</h3>
-              
+              <h3 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">
+                Add Delivery Address
+              </h3>
+
               <form onSubmit={handleAddNewAddress} className="space-y-3.5 text-xs font-semibold">
-                
-                {/* Type Selection */}
+                {/* Label */}
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-text-secondary uppercase">Address Label</span>
+                  <span className="text-[10px] font-bold text-text-secondary uppercase">
+                    Address Label
+                  </span>
                   <div className="flex gap-2">
                     {(['Home', 'Work', 'Other'] as const).map((lbl) => (
                       <button
@@ -484,10 +713,10 @@ export const CheckoutPage: React.FC = () => {
                         type="button"
                         onClick={() => setNewAddrLabel(lbl)}
                         className={cn(
-                          "flex-1 py-2 rounded-lg border text-xs font-bold cursor-pointer transition-all",
-                          newAddrLabel === lbl 
-                            ? "border-brand-emerald bg-brand-emerald/5 text-brand-emerald" 
-                            : "border-border-primary bg-bg-tertiary"
+                          'flex-1 py-2 rounded-lg border text-xs font-bold cursor-pointer transition-all',
+                          newAddrLabel === lbl
+                            ? 'border-brand-emerald bg-brand-emerald/5 text-brand-emerald'
+                            : 'border-border-primary bg-bg-tertiary',
                         )}
                       >
                         {lbl}
@@ -496,9 +725,10 @@ export const CheckoutPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Street Address */}
                 <div className="space-y-1">
-                  <label htmlFor="newAddrStreet" className="text-[10px] font-bold text-text-secondary uppercase">Street Address</label>
+                  <label htmlFor="newAddrStreet" className="text-[10px] font-bold text-text-secondary uppercase">
+                    Street Address
+                  </label>
                   <input
                     id="newAddrStreet"
                     placeholder="123 Fresh Lane, Koramangala"
@@ -510,7 +740,9 @@ export const CheckoutPage: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label htmlFor="newAddrZip" className="text-[10px] font-bold text-text-secondary uppercase">PIN Code</label>
+                    <label htmlFor="newAddrZip" className="text-[10px] font-bold text-text-secondary uppercase">
+                      PIN Code
+                    </label>
                     <input
                       id="newAddrZip"
                       placeholder="560034"
@@ -520,7 +752,9 @@ export const CheckoutPage: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label htmlFor="newAddrCity" className="text-[10px] font-bold text-text-secondary uppercase">City</label>
+                    <label htmlFor="newAddrCity" className="text-[10px] font-bold text-text-secondary uppercase">
+                      City
+                    </label>
                     <input
                       id="newAddrCity"
                       placeholder="Bengaluru"
@@ -531,9 +765,10 @@ export const CheckoutPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Landmark */}
                 <div className="space-y-1">
-                  <label htmlFor="newAddrLandmark" className="text-[10px] font-bold text-text-secondary uppercase">Landmark (Optional)</label>
+                  <label htmlFor="newAddrLandmark" className="text-[10px] font-bold text-text-secondary uppercase">
+                    Landmark (Optional)
+                  </label>
                   <input
                     id="newAddrLandmark"
                     placeholder="Near Central Mall"
@@ -558,13 +793,11 @@ export const CheckoutPage: React.FC = () => {
                     Save Address
                   </button>
                 </div>
-
               </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-
     </motion.div>
   );
 };

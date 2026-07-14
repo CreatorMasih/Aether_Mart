@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Power, 
@@ -11,39 +11,163 @@ import {
   Play,
   Square
 } from 'lucide-react';
-import { useRiderStore } from '../store/rider-store';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../../core/network/queryKeys';
+import { riderService } from '../services/rider-service';
+import { apiClient } from '../../../core/network/api-client';
+import { useToast } from '../../../hooks/useToast';
 import { formatCurrency } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 
 export const RiderDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { 
-    isOnline, 
-    shiftActive, 
-    shiftStartTime, 
-    todayEarnings, 
-    currentBalance, 
-    completedCount, 
-    rating, 
-    availableJobs, 
-    activeJob, 
-    acceptJob, 
-    toggleOnline, 
-    toggleShift,
-    profileDocs,
-    payoutHistory
-  } = useRiderStore();
-
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'JOBS' | 'EARNINGS' | 'DOCS'>('JOBS');
 
+  // Geolocation states
+  const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 12.9360, lng: 77.6250 });
+
+  // Resolve current coordinates on load
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          console.warn('Geolocation blocked or not available. Reverting coordinates to Bangalore default.');
+        }
+      );
+    }
+  }, []);
+
+  // 1. Queries
+  const { data: profileMe } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => {
+      const res = await apiClient.get('/auth/me');
+      return res.data.data;
+    }
+  });
+
+  const rider = profileMe?.profile;
+  const isOnline = rider?.isOnline ?? false;
+  const shiftActive = isOnline; // Shift status maps to online status
+
+  const { data: earningsData, isLoading: earningsLoading } = useQuery({
+    queryKey: queryKeys.riderEarnings(),
+    queryFn: () => riderService.getEarnings(),
+    enabled: !!rider?.id,
+  });
+
+  const { data: availableDeliveries } = useQuery({
+    queryKey: queryKeys.riderAvailableJobs(coords.lat, coords.lng),
+    queryFn: () => riderService.getAvailableDeliveries(coords.lat, coords.lng),
+    refetchInterval: 5000, // Poll available jobs every 5 seconds when online
+    enabled: isOnline && !!rider?.id,
+  });
+
+  const { data: assignmentsData } = useQuery({
+    queryKey: queryKeys.riderAssignments(),
+    queryFn: () => riderService.getAssignments(),
+    enabled: !!rider?.id,
+  });
+
+  const assignmentsList = assignmentsData ?? [];
+  const availableJobsList = availableDeliveries ?? [];
+
+  // Find active assignment
+  const activeJob = assignmentsList.find((ass) => 
+    ['ASSIGNED', 'ACCEPTED', 'PICKED_UP'].includes(ass.status)
+  );
+
+  // 2. Mutations
+  const toggleDutyMutation = useMutation({
+    mutationFn: (nextOnline: boolean) => 
+      riderService.sendHeartbeat(coords.lat, coords.lng, nextOnline),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderAvailableJobs(coords.lat, coords.lng) });
+      showToast({
+        type: 'success',
+        title: 'Duty Status Updated',
+        description: 'Online shift duty updated in database.',
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        type: 'error',
+        title: 'Status Transition Failed',
+        description: err.message || 'Unable to update duty status.',
+      });
+    }
+  });
+
+  const acceptJobMutation = useMutation({
+    mutationFn: (orderId: string) => riderService.acceptDelivery(orderId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderAssignments() });
+      showToast({
+        type: 'success',
+        title: 'Delivery Accepted',
+        description: 'You have accepted the delivery assignment.',
+      });
+      navigate('/r/active');
+    },
+    onError: (err: any) => {
+      showToast({
+        type: 'error',
+        title: 'Acceptance Failed',
+        description: err.message || 'Unable to accept this delivery job.',
+      });
+    }
+  });
+
+  const payoutMutation = useMutation({
+    mutationFn: () => riderService.requestPayout(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderEarnings() });
+      showToast({
+        type: 'success',
+        title: 'Transfer Completed',
+        description: 'Earnings balance transferred to your registered bank account.',
+      });
+    },
+    onError: (err: any) => {
+      showToast({
+        type: 'error',
+        title: 'Transfer Failed',
+        description: err.message || 'Unable to process payout transaction.',
+      });
+    }
+  });
+
   const handleSOS = () => {
-    alert('🚨 EMERGENCY SOS ACTIVED. Alerting nearest dispatch agent and transmitting current coordinates.');
+    alert('🚨 EMERGENCY SOS ACTIVATED. Alerting nearest dispatch agent and transmitting current coordinates.');
   };
 
-  const handleAccept = (jobId: string) => {
-    acceptJob(jobId);
-    navigate('/r/active');
+  const handleAccept = (orderId: string) => {
+    acceptJobMutation.mutate(orderId);
   };
+
+  const handleTransferBank = () => {
+    payoutMutation.mutate();
+  };
+
+  if (earningsLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-xs font-semibold text-text-secondary select-none">
+        Loading rider profile and metrics...
+      </div>
+    );
+  }
+
+  const todayEarnings = earningsData?.todayEarnings ?? 0;
+  const completedCount = earningsData?.completedCount ?? 0;
+  const rating = earningsData?.rating ?? 5.0;
+  const currentBalance = earningsData?.balance ?? 0;
+  const payoutHistoryList = earningsData?.payoutHistory ?? [];
 
   return (
     <div className="space-y-6 pb-16 text-xs font-semibold text-text-secondary select-none max-w-lg mx-auto">
@@ -54,12 +178,13 @@ export const RiderDashboard: React.FC = () => {
           <div>
             <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">Aether Partner</h2>
             <span className="text-[9px] text-text-secondary uppercase mt-0.5 block font-bold tracking-wider">
-              {shiftActive ? `Shift active since ${shiftStartTime}` : 'Shift Offline'}
+              {shiftActive ? 'Shift active & online' : 'Shift Offline'}
             </span>
           </div>
           
           <button
-            onClick={toggleOnline}
+            onClick={() => toggleDutyMutation.mutate(!isOnline)}
+            disabled={toggleDutyMutation.isPending}
             className={cn(
               "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
               isOnline 
@@ -74,7 +199,8 @@ export const RiderDashboard: React.FC = () => {
 
         {/* Start/Stop Shift button */}
         <button
-          onClick={toggleShift}
+          onClick={() => toggleDutyMutation.mutate(!isOnline)}
+          disabled={toggleDutyMutation.isPending}
           className={cn(
             "w-full py-3.5 rounded-xl font-bold transition-all cursor-pointer flex items-center justify-center gap-2",
             shiftActive 
@@ -162,24 +288,24 @@ export const RiderDashboard: React.FC = () => {
                 <h4 className="font-extrabold text-text-primary text-xs">Duty Offline</h4>
                 <p className="text-[10px] leading-relaxed">Turn Online and Start shift duty to receive nearby delivery alerts.</p>
               </div>
-            ) : availableJobs.length === 0 ? (
+            ) : availableJobsList.length === 0 ? (
               <div className="p-8 text-center border border-dashed border-border-primary rounded-2xl bg-bg-secondary text-text-secondary">
                 🌱 Polling active jobs... Standing by for nearby order dispatches.
               </div>
             ) : (
               <div className="space-y-3">
-                {availableJobs.map((job) => (
+                {availableJobsList.map((job) => (
                   <div key={job.id} className="p-4 rounded-xl border border-border-primary bg-bg-secondary space-y-3 shadow-subtle">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-[8px] font-extrabold px-1.5 py-0.5 bg-bg-tertiary border border-border-primary rounded text-text-primary uppercase">
-                          {job.id}
+                          {job.orderNumber}
                         </span>
                         <h4 className="font-extrabold text-text-primary mt-1">{job.storeName}</h4>
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-extrabold text-brand-emerald font-heading">
-                          {formatCurrency(job.estimatedEarnings)}
+                          {formatCurrency(job.deliveryFee + job.driverTip)}
                         </span>
                         <span className="text-[9px] text-text-secondary block font-semibold mt-0.5">Est. Earnings</span>
                       </div>
@@ -188,21 +314,22 @@ export const RiderDashboard: React.FC = () => {
                     <div className="space-y-1.5 text-[10px] text-text-secondary">
                       <p className="flex items-center gap-1.5 font-semibold">
                         <MapPin className="h-4.5 w-4.5 text-text-secondary flex-shrink-0" />
-                        Pickup: {job.storeAddress}
+                        Pickup: {job.deliveryAddress.streetAddress}
                       </p>
                       <p className="flex items-center gap-1.5 font-semibold">
                         <MapPin className="h-4.5 w-4.5 text-text-secondary flex-shrink-0" />
-                        Drop: {job.customerAddress}
+                        Drop: {job.deliveryAddress.streetAddress}
                       </p>
                     </div>
 
                     <div className="flex justify-between items-center pt-2 border-t border-border-primary/60 text-[10px]">
-                      <span className="text-text-secondary font-bold uppercase">{job.distanceKm} km • {job.estTimeMinutes} mins</span>
+                      <span className="text-text-secondary font-bold uppercase">5.2 km • 15 mins</span>
                       <button
                         onClick={() => handleAccept(job.id)}
-                        className="py-1.5 px-4 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-lg font-extrabold cursor-pointer"
+                        disabled={acceptJobMutation.isPending}
+                        className="py-1.5 px-4 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-lg font-extrabold cursor-pointer disabled:opacity-50"
                       >
-                        Accept Delivery
+                        {acceptJobMutation.isPending ? 'Accepting...' : 'Accept Delivery'}
                       </button>
                     </div>
                   </div>
@@ -224,10 +351,11 @@ export const RiderDashboard: React.FC = () => {
                 </div>
               </div>
               <button 
-                onClick={() => alert('Earnings transferred to your registered bank account.')}
-                className="py-2 px-4 bg-brand-emerald text-white rounded-lg font-bold cursor-pointer"
+                onClick={handleTransferBank}
+                disabled={currentBalance <= 0 || payoutMutation.isPending}
+                className="py-2 px-4 bg-brand-emerald text-white rounded-lg font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Transfer to Bank
+                {payoutMutation.isPending ? 'Processing...' : 'Transfer to Bank'}
               </button>
             </div>
 
@@ -235,7 +363,7 @@ export const RiderDashboard: React.FC = () => {
             <div className="space-y-2">
               <span className="text-[9px] text-text-secondary uppercase font-bold tracking-wider block">Past Payout logs</span>
               <div className="divide-y divide-border-primary border border-border-primary rounded-xl overflow-hidden bg-bg-secondary">
-                {payoutHistory.map((pay) => (
+                {payoutHistoryList.map((pay) => (
                   <div key={pay.id} className="p-3.5 flex justify-between items-center">
                     <div>
                       <span className="font-bold text-text-primary">{pay.id}</span>
@@ -247,6 +375,11 @@ export const RiderDashboard: React.FC = () => {
                     </div>
                   </div>
                 ))}
+                {payoutHistoryList.length === 0 && (
+                  <div className="text-center py-6 text-text-secondary">
+                    No past payout transfers recorded.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -262,11 +395,11 @@ export const RiderDashboard: React.FC = () => {
               <div className="flex items-center justify-between border-b border-border-primary/60 pb-3">
                 <div>
                   <span className="font-bold text-text-primary block">Driving License</span>
-                  <span className="text-[9px] text-text-secondary font-semibold mt-0.5 block">{profileDocs.licenseNumber}</span>
+                  <span className="text-[9px] text-text-secondary font-semibold mt-0.5 block">{rider?.licenseNumber || 'Not Uploaded'}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-brand-emerald">
+                <div className={cn("flex items-center gap-1.5", rider?.isLicenseUploaded ? "text-brand-emerald" : "text-status-warning")}>
                   <FileCheck className="h-4.5 w-4.5" />
-                  <span className="text-[9px] font-bold uppercase">VERIFIED</span>
+                  <span className="text-[9px] font-bold uppercase">{rider?.isLicenseUploaded ? 'VERIFIED' : 'PENDING'}</span>
                 </div>
               </div>
 
@@ -274,11 +407,11 @@ export const RiderDashboard: React.FC = () => {
               <div className="flex items-center justify-between border-b border-border-primary/60 pb-3">
                 <div>
                   <span className="font-bold text-text-primary block">Vehicle RC Document</span>
-                  <span className="text-[9px] text-text-secondary font-semibold mt-0.5 block">{profileDocs.rcNumber}</span>
+                  <span className="text-[9px] text-text-secondary font-semibold mt-0.5 block">{rider?.rcNumber || 'Not Uploaded'}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-brand-emerald">
+                <div className={cn("flex items-center gap-1.5", rider?.isRcUploaded ? "text-brand-emerald" : "text-status-warning")}>
                   <FileCheck className="h-4.5 w-4.5" />
-                  <span className="text-[9px] font-bold uppercase">VERIFIED</span>
+                  <span className="text-[9px] font-bold uppercase">{rider?.isRcUploaded ? 'VERIFIED' : 'PENDING'}</span>
                 </div>
               </div>
 
@@ -288,9 +421,9 @@ export const RiderDashboard: React.FC = () => {
                   <span className="font-bold text-text-primary block">Vehicle Insurance</span>
                   <span className="text-[9px] text-text-secondary font-semibold mt-0.5 block">Valid till Sept 2027</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-brand-emerald">
+                <div className={cn("flex items-center gap-1.5", rider?.isInsuranceUploaded ? "text-brand-emerald" : "text-status-warning")}>
                   <FileCheck className="h-4.5 w-4.5" />
-                  <span className="text-[9px] font-bold uppercase">VERIFIED</span>
+                  <span className="text-[9px] font-bold uppercase">{rider?.isInsuranceUploaded ? 'VERIFIED' : 'PENDING'}</span>
                 </div>
               </div>
 

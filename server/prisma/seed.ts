@@ -9,6 +9,7 @@ async function main() {
   // Clear existing data
   console.log('🧹 Clearing old data...');
   await prisma.auditLog.deleteMany();
+  await prisma.payout.deleteMany();
   await prisma.appSetting.deleteMany();
   await prisma.supportTicket.deleteMany();
   await prisma.referral.deleteMany();
@@ -211,6 +212,8 @@ async function main() {
       gstNumber: '29AAAAA1111A1Z1',
       panNumber: 'ABCDE1234F',
       fssaiNumber: '10012011000122',
+      bankAccount: '123456789012',
+      bankName: 'HDFC Bank',
       isApproved: true,
     },
   });
@@ -253,6 +256,10 @@ async function main() {
       longitude: 77.6245,
       isOpen: true,
       commissionRate: 0.10,
+      minimumOrderValue: 150.0,
+      deliveryFee: 25.0,
+      openingTime: '00:00',
+      closingTime: '23:59',
     },
   });
 
@@ -270,6 +277,8 @@ async function main() {
       longitude: 77.6450,
       isOpen: true,
       commissionRate: 0.08,
+      openingTime: '00:00',
+      closingTime: '23:59',
     },
   });
 
@@ -287,6 +296,8 @@ async function main() {
       longitude: 77.5946,
       isOpen: true,
       commissionRate: 0.12,
+      openingTime: '00:00',
+      closingTime: '23:59',
     },
   });
 
@@ -303,6 +314,14 @@ async function main() {
       currentLatitude: 12.9360,
       currentLongitude: 77.6250,
       rating: 4.9,
+      licenseNumber: 'KA-51/D-0099881',
+      rcNumber: 'KA-51-EH-8822',
+      isRcUploaded: true,
+      isInsuranceUploaded: true,
+      isLicenseUploaded: true,
+      balance: 870.0,
+      bankAccount: '987654321098',
+      bankName: 'ICICI Bank',
     },
   });
 
@@ -822,7 +841,43 @@ async function main() {
       { key: 'platform_active_surge_fee', value: '0.0', description: 'Active surge fees added to delivery' },
     ],
   });
+  // 16. Payouts / Settlements History
+  console.log('💰 Seeding Payouts / Settlements...');
+  await prisma.payout.create({
+    data: {
+      merchantId: merchant1.id,
+      amount: 8400,
+      status: 'SUCCESS',
+      createdAt: new Date('2026-07-01T10:00:00Z'),
+    },
+  });
 
+  await prisma.payout.create({
+    data: {
+      merchantId: merchant1.id,
+      amount: 10050,
+      status: 'SUCCESS',
+      createdAt: new Date('2026-06-24T10:00:00Z'),
+    },
+  });
+
+  await prisma.payout.create({
+    data: {
+      riderId: rider1.id,
+      amount: 560,
+      status: 'SUCCESS',
+      createdAt: new Date('2026-07-12T16:00:00Z'),
+    },
+  });
+
+  await prisma.payout.create({
+    data: {
+      riderId: rider1.id,
+      amount: 980,
+      status: 'SUCCESS',
+      createdAt: new Date('2026-07-01T16:00:00Z'),
+    },
+  });
   console.log('🎉 Seeding successfully completed!');
 }
 

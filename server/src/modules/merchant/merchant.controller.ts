@@ -135,6 +135,36 @@ export class MerchantController {
       next(error);
     }
   };
+
+  public getDashboardStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const stats = await merchantService.getDashboardStats(userId);
+      sendSuccess(res, stats, 'Merchant dashboard analytics retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public getPayouts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const payouts = await merchantService.getPayouts(userId);
+      sendSuccess(res, payouts, 'Merchant settlement payouts retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const merchantController = new MerchantController();

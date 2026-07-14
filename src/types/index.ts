@@ -1,4 +1,8 @@
 import type { OrderStatus, UserRole } from '../core/config/constants';
+export type { OrderStatus, UserRole };
+
+// ─── Payment Method (must match backend Prisma enum exactly) ─────────────────
+export type PaymentMethod = 'COD' | 'WALLET' | 'RAZORPAY';
 
 export interface GeoCoordinates {
   latitude: number;
@@ -33,6 +37,7 @@ export interface ProductVariant {
   price: number;
   stock: number;
   sku: string;
+  weightGrams?: number;
 }
 
 export interface Product {
@@ -128,3 +133,139 @@ export interface Rider {
   currentCoordinates?: GeoCoordinates;
   rating: number;
 }
+
+export interface ReviewRating {
+  id: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  date: string;
+  isVerifiedPurchase: boolean;
+  photos?: string[];
+}
+
+// ─── Cart (Backend-driven, single source of truth) ────────────────────────────
+
+export interface CartItemData {
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  name: string;
+  imageUrl: string;
+  price: number;
+  total: number;
+  variantName: string | null;
+}
+
+export interface CartStoreInfo {
+  id: string;
+  name: string;
+  rating: number;
+}
+
+export interface CouponApplied {
+  id: string;
+  code: string;
+  discount: number;
+}
+
+export interface CartData {
+  id: string | null;
+  store: CartStoreInfo | null;
+  items: CartItemData[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  packagingFee: number;
+  handlingFee: number;
+  deliveryFee: number;
+  surgeFee: number;
+  driverTip: number;
+  ecoPackaging: boolean;
+  totalAmount: number;
+  coupon: CouponApplied | null;
+}
+
+export interface PricingData {
+  store: CartStoreInfo | null;
+  items: CartItemData[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  packagingFee: number;
+  handlingFee: number;
+  deliveryFee: number;
+  surgeFee: number;
+  driverTip: number;
+  ecoPackaging: boolean;
+  totalWeightGrams: number;
+  totalAmount: number;
+  coupon: CouponApplied | null;
+}
+
+export interface CouponValidation {
+  code: string;
+  type: 'FLAT' | 'PERCENTAGE';
+  value: number;
+  maxDiscount: number | null;
+}
+
+// ─── Orders ───────────────────────────────────────────────────────────────────
+
+export interface OrderItemData {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  variantLabel: string | null;
+  imageUrl: string;
+}
+
+export interface OrderData {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  storeId: string;
+  storeName: string;
+  items: OrderItemData[];
+  status: OrderStatus;
+  deliveryAddress: Address;
+  paymentMethod: PaymentMethod;
+  deliveryFee: number;
+  packagingFee: number;
+  handlingFee: number;
+  tax: number;
+  discount: number;
+  driverTip: number;
+  totalAmount: number;
+  createdAt: string;
+  riderId: string | null;
+  riderLocation: GeoCoordinates | null;
+  estimatedDeliveryTime: string | null;
+}
+
+export interface PayoutData {
+  id: string;
+  date: string;
+  amount: number;
+  status: 'SUCCESS' | 'PENDING' | 'FAILED';
+}
+
+export interface MerchantDashboardStats {
+  totalRevenue: number;
+  completedOrdersCount: number;
+  activeOrdersCount: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+  chartData: Array<{ label: string; val: number }>;
+}
+
+export interface RiderEarningsData {
+  balance: number;
+  todayEarnings: number;
+  completedCount: number;
+  rating: number;
+  payoutHistory: PayoutData[];
+}
+
