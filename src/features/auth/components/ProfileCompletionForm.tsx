@@ -13,6 +13,7 @@ import { cn } from '../../../utils/cn';
 const customerOnboardingSchema = z.object({
   fullName: z.string().trim().min(3, { message: 'Name must contain at least 3 characters.' }),
   email: z.string().trim().email({ message: 'Please enter a valid email address.' }),
+  receiverPhone: z.string().trim().regex(/^\+?[1-9]\d{1,14}$/, { message: 'Please enter a valid receiver phone number (e.g. +919876543210).' }),
   streetAddress: z.string().trim().min(5, { message: 'Street address must contain at least 5 characters.' }),
   apartmentSuite: z.string().trim().optional(),
   postalCode: z.string().trim().regex(/^\d{6}$/, { message: 'PIN code must be exactly 6 digits.' }),
@@ -63,7 +64,7 @@ export const ProfileCompletionForm: React.FC<ProfileCompletionFormProps> = ({
 
   const customerForm = useForm<CustomerFormData>({
     resolver: zodResolver(customerOnboardingSchema),
-    defaultValues: { fullName: '', email: '', streetAddress: '', apartmentSuite: '', postalCode: '', city: '' },
+    defaultValues: { fullName: '', email: user?.email || '', receiverPhone: user?.phone || '', streetAddress: '', apartmentSuite: '', postalCode: '', city: '' },
   });
 
   const merchantForm = useForm<MerchantFormData>({
@@ -89,7 +90,7 @@ export const ProfileCompletionForm: React.FC<ProfileCompletionFormProps> = ({
           defaultAddress: {
             label: 'Home',
             receiverName: data.fullName,
-            receiverPhone: user.phone,
+            receiverPhone: data.receiverPhone,
             streetAddress: data.streetAddress,
             apartmentSuite: data.apartmentSuite,
             postalCode: data.postalCode,
@@ -230,6 +231,26 @@ export const ProfileCompletionForm: React.FC<ProfileCompletionFormProps> = ({
               />
               {customerForm.formState.errors.email && (
                 <p className="text-xs text-status-error font-medium">{customerForm.formState.errors.email.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="receiverPhone" className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+                Phone Number
+              </label>
+              <input
+                id="receiverPhone"
+                type="tel"
+                placeholder="+919876543210"
+                disabled={isLoading}
+                {...customerForm.register('receiverPhone')}
+                className={cn(
+                  "w-full px-4 py-2.5 border border-border-primary rounded-xl text-sm font-semibold bg-bg-secondary text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-emerald/20 focus:border-brand-emerald",
+                  customerForm.formState.errors.receiverPhone && "border-status-error"
+                )}
+              />
+              {customerForm.formState.errors.receiverPhone && (
+                <p className="text-xs text-status-error font-medium">{customerForm.formState.errors.receiverPhone.message}</p>
               )}
             </div>
 

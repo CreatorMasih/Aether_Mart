@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-07-15
+
+### Fixed
+- Added `receiverPhone` input field and form state validation mapping to the customer profile completion form to prevent onboarding validation failures (HTTP 422/400). Prefilled the field automatically from the active authenticated user profile values.
+
 ## [1.0.0] - 2026-07-14
 
 ### Added
