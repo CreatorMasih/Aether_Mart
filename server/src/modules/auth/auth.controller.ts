@@ -57,6 +57,35 @@ export class AuthController {
   };
 
   /**
+   * Securely validates Google ID Token and logs-in/registers the user.
+   */
+  public googleLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { token, role } = req.body;
+
+      const deviceId = req.headers['x-device-id'] as string || undefined;
+      const userAgent = req.headers['user-agent'] || undefined;
+      const ipAddress = req.ip || undefined;
+
+      const { tokens, user } = await authService.googleLogin({
+        token,
+        role,
+        deviceId,
+        userAgent,
+        ipAddress,
+      });
+
+      // Set Refresh Token as HTTP-only secure cookie
+      res.cookie('refreshToken', tokens.refreshToken, refreshTokenCookieOptions);
+
+      // Return accessToken in payload to match frontend Axios wrapper contract
+      sendSuccess(res, { token: tokens.accessToken, user }, 'Login successful', HttpStatus.OK);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
    * Rotates JWT access and refresh token sessions.
    */
   public refresh = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

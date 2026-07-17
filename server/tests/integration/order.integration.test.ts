@@ -38,6 +38,8 @@ beforeAll(async () => {
     },
   });
 
+  await prisma.address.deleteMany({ where: { id: testAddressId } });
+
   await prisma.address.create({
     data: {
       id: testAddressId,
@@ -96,13 +98,13 @@ afterAll(async () => {
     await prisma.walletTransaction.deleteMany({
       where: { wallet: { customerId: user.customer.id } },
     });
-    await prisma.wallet.delete({
+    await prisma.wallet.deleteMany({
       where: { customerId: user.customer.id },
     });
     await prisma.cartItem.deleteMany({
       where: { cart: { customerId: user.customer.id } },
     });
-    await prisma.cart.delete({
+    await prisma.cart.deleteMany({
       where: { customerId: user.customer.id },
     });
     await prisma.address.deleteMany({
@@ -130,23 +132,12 @@ describe('📦 Order, Cart & Checkout Module Integration Tests', () => {
   let razorpayPaymentId: string;
 
   beforeAll(async () => {
-    // 1. Send OTP
-    await request(app)
-      .post('/api/auth/send-otp')
-      .send({
-        identifier: 'order-test-user@aethermart.com',
-        type: 'EMAIL',
-        role: 'CUSTOMER',
-      });
-
-    // 2. Verify OTP
+    // Authenticate CUSTOMER using Google Login
     const authRes = await request(app)
-      .post('/api/auth/verify-otp')
+      .post('/api/auth/google-login')
       .send({
-        identifier: 'order-test-user@aethermart.com',
-        code: '123456',
+        token: 'mock-google-token-order-test-user@aethermart.com',
         role: 'CUSTOMER',
-        method: 'EMAIL',
       });
     accessToken = authRes.body.data.token;
 

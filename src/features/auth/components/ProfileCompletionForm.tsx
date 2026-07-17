@@ -64,17 +64,17 @@ export const ProfileCompletionForm: React.FC<ProfileCompletionFormProps> = ({
 
   const customerForm = useForm<CustomerFormData>({
     resolver: zodResolver(customerOnboardingSchema),
-    defaultValues: { fullName: '', email: user?.email || '', receiverPhone: user?.phone || '', streetAddress: '', apartmentSuite: '', postalCode: '', city: '' },
+    defaultValues: { fullName: user?.fullName || '', email: user?.email || '', receiverPhone: user?.phone || '', streetAddress: '', apartmentSuite: '', postalCode: '', city: '' },
   });
 
   const merchantForm = useForm<MerchantFormData>({
     resolver: zodResolver(merchantOnboardingSchema),
-    defaultValues: { fullName: '', email: '', storeName: '', storeAddress: '', deliveryRadiusKm: 5 },
+    defaultValues: { fullName: user?.fullName || '', email: user?.email || '', storeName: '', storeAddress: '', deliveryRadiusKm: 5 },
   });
 
   const riderForm = useForm<RiderFormData>({
     resolver: zodResolver(riderOnboardingSchema),
-    defaultValues: { fullName: '', email: '', vehicleType: 'BICYCLE', vehiclePlateNumber: '' },
+    defaultValues: { fullName: user?.fullName || '', email: user?.email || '', vehicleType: 'BICYCLE', vehiclePlateNumber: '' },
   });
 
   const handleCustomerSubmit = async (data: CustomerFormData) => {

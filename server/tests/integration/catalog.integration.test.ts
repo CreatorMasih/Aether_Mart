@@ -62,23 +62,12 @@ describe('🛒 Catalog Module Integration Tests', () => {
   let targetProductId: string;
 
   beforeAll(async () => {
-    // Generate active OTP request
-    await request(app)
-      .post('/api/auth/send-otp')
-      .send({
-        identifier: 'catalog-test-user@aethermart.com',
-        type: 'EMAIL',
-        role: 'CUSTOMER',
-      });
-
-    // Authenticate test user
+    // Authenticate test user via Google Login
     const res = await request(app)
-      .post('/api/auth/verify-otp')
+      .post('/api/auth/google-login')
       .send({
-        identifier: 'catalog-test-user@aethermart.com',
-        code: '123456', // Test static bypass code
+        token: 'mock-google-token-catalog-test-user@aethermart.com',
         role: 'CUSTOMER',
-        method: 'EMAIL',
       });
     
     accessToken = res.body.data.token;

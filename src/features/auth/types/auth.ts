@@ -44,3 +44,8 @@ export interface ProfileCompletionRequest {
   merchantDetails?: MerchantProfileCompletion;
   riderDetails?: RiderProfileCompletion;
 }
+
+export interface GoogleLoginRequest {
+  token: string;
+  role: UserRole;
+}

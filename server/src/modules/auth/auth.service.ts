@@ -7,6 +7,7 @@ import { HttpStatus, ErrorCodes } from '../../utils/response.util';
 import { createModuleLogger } from '../../utils/logger';
 import emailService from '../../common/services/email.service';
 import { v4 as uuidv4 } from 'uuid';
+import { googleAuthService } from './google.service';
 
 const log = createModuleLogger('AuthService');
 
@@ -132,6 +133,123 @@ export class AuthService {
       isProfileComplete,
       walletBalance: fullUser.customer?.wallet?.balance || 0,
       avatarUrl: undefined,
+      savedAddresses,
+    };
+
+    return {
+      tokens,
+      user: userSession,
+    };
+  }
+
+  /**
+   * Validates Google ID Token and logs in or registers the user.
+   */
+  public async googleLogin(params: {
+    token: string;
+    role: UserRole;
+    deviceId?: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }): Promise<{ tokens: any; user: any }> {
+    // 1. Verify Google Token
+    const profile = await googleAuthService.verifyToken(params.token);
+
+    // 2. Find or dynamically create user using email from profile
+    let user = await authRepository.findUserByIdentifier(profile.email);
+
+    if (!user) {
+      user = await authRepository.createUser({
+        email: profile.email,
+        role: params.role,
+        isVerified: true,
+      });
+      log.info(`New user registered via Google: ${user.id} (${params.role})`);
+    } else {
+      // If user exists, verify role matches
+      if (user.role !== params.role) {
+        let portalName = 'Customer';
+        if (user.role === 'SHOPKEEPER') portalName = 'Merchant';
+        else if (user.role === 'RIDER') portalName = 'Rider';
+        else if (user.role === 'ADMIN') portalName = 'Super Admin';
+
+        const roleDisplay = user.role === 'SHOPKEEPER' ? 'Rider' : user.role === 'RIDER' ? 'Rider' : user.role === 'CUSTOMER' ? 'Customer' : 'Super Admin';
+        // Note: The prompt asks for: "This Google account is registered as a Rider. Please login using the Rider Portal."
+        // We will output: "This Google account is registered as a <Role>. Please login using the <Portal> Portal."
+        const finalRoleDisplay = user.role === 'SHOPKEEPER' ? 'Rider' : user.role === 'RIDER' ? 'Rider' : user.role === 'CUSTOMER' ? 'Customer' : 'Super Admin';
+        // Wait, let's look at the example:
+        // "This Google account is registered as a Rider. Please login using the Rider Portal."
+        // If role is SHOPKEEPER, is it registered as a Merchant? Wait! The prompt enum uses SHOPKEEPER but the user refers to it as Merchant/Shopkeeper. Let's make it match:
+        const promptRoleDisplay = user.role === 'SHOPKEEPER' ? 'Merchant' : user.role === 'RIDER' ? 'Rider' : user.role === 'CUSTOMER' ? 'Customer' : 'Super Admin';
+
+        throw new AppError(
+          `This Google account is registered as a ${promptRoleDisplay}. Please login using the ${portalName} Portal.`,
+          HttpStatus.FORBIDDEN,
+          ErrorCodes.FORBIDDEN
+        );
+      }
+    }
+
+    // 3. Check account status
+    if (user.status === UserStatus.BLOCKED || user.status === UserStatus.SUSPENDED) {
+      throw new AppError(
+        `This account is ${user.status.toLowerCase()}. Please contact support.`,
+        HttpStatus.FORBIDDEN,
+        ErrorCodes.ACCOUNT_SUSPENDED
+      );
+    }
+
+    // 4. Generate token pair
+    const tokenFamily = uuidv4();
+    const payload = {
+      userId: user.id,
+      role: user.role,
+      email: user.email || undefined,
+      phone: user.phone || undefined,
+    };
+
+    const tokens = generateTokenPair(payload);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // Save refresh token in DB
+    await authRepository.createRefreshToken({
+      userId: user.id,
+      token: tokens.refreshToken,
+      expiresAt,
+      deviceId: params.deviceId,
+      userAgent: params.userAgent,
+      ipAddress: params.ipAddress,
+      family: tokenFamily,
+    });
+
+    // 5. Gather profile status
+    const fullUser = await authRepository.findUserWithProfile(user.id);
+    const isProfileComplete = this.checkProfileCompletion(fullUser);
+
+    const savedAddresses = (fullUser.addresses || []).map((addr: any) => ({
+      id: addr.id,
+      label: addr.label,
+      receiverName: addr.receiverName,
+      receiverPhone: addr.receiverPhone,
+      streetAddress: addr.streetAddress,
+      apartmentSuite: addr.apartmentSuite || undefined,
+      postalCode: addr.postalCode,
+      city: addr.city,
+      coordinates: {
+        latitude: addr.latitude,
+        longitude: addr.longitude,
+      },
+    }));
+
+    const userSession = {
+      id: user.id,
+      phone: user.phone || undefined,
+      email: user.email || undefined,
+      fullName: isProfileComplete ? this.extractFullName(fullUser) : (profile.name || undefined),
+      role: user.role,
+      isProfileComplete,
+      walletBalance: fullUser.customer?.wallet?.balance || 0,
+      avatarUrl: profile.picture || undefined,
       savedAddresses,
     };
 

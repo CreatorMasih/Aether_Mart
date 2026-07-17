@@ -15,14 +15,19 @@ export const sendOtpSchema = z.object({
     message: 'Identifier must be a valid email address or phone number (e.g. +919876543210)',
   }),
   type: z.enum(['SMS', 'EMAIL']),
-  role: z.enum(['CUSTOMER', 'SHOPKEEPER', 'RIDER', 'ADMIN']),
+  role: z.enum(['ADMIN']),
 });
 
 export const verifyOtpSchema = z.object({
   identifier: z.string().min(3),
   code: z.string().length(6, 'Verification code must be exactly 6 digits'),
-  role: z.enum(['CUSTOMER', 'SHOPKEEPER', 'RIDER', 'ADMIN']),
+  role: z.enum(['ADMIN']),
   method: z.enum(['PHONE', 'EMAIL', 'GOOGLE', 'APPLE', 'WHATSAPP']),
+});
+
+export const googleLoginSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+  role: z.enum(['CUSTOMER', 'SHOPKEEPER', 'RIDER']),
 });
 
 export const addressSchema = z.object({

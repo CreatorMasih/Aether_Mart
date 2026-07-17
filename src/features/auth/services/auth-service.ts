@@ -3,7 +3,8 @@ import { API_ENDPOINTS } from '../../../core/config/constants';
 import type { 
   OtpSendRequest, 
   OtpVerifyRequest, 
-  ProfileCompletionRequest 
+  ProfileCompletionRequest,
+  GoogleLoginRequest
 } from '../types/auth';
 import type { User } from '../../../types';
 
@@ -43,6 +44,24 @@ export class AuthService extends BaseRepository {
       }
       const response = await this.client.post<BackendResponse<AuthResponseDTO>>(
         API_ENDPOINTS.auth.verifyOtp, 
+        request
+      );
+      return response.data.data;
+    });
+  }
+
+  /**
+   * Securely validates Google ID Token and logs-in/registers the user.
+   */
+  public async googleLogin(request: GoogleLoginRequest): Promise<AuthResponseDTO> {
+    return this.executeRequest(async () => {
+      interface BackendResponse<T> {
+        success: boolean;
+        data: T;
+        message: string;
+      }
+      const response = await this.client.post<BackendResponse<AuthResponseDTO>>(
+        '/auth/google-login', 
         request
       );
       return response.data.data;

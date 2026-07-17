@@ -166,33 +166,30 @@ describe('🏪 Merchant & 🚴 Rider Modules Integration Tests', () => {
     testRiderId = riderObj?.id || '';
 
     // 1. Authenticate Merchant (Using seeded merchant-1 credentials)
-    await request(app)
-      .post('/api/auth/send-otp')
-      .send({ identifier: 'merchant1@aethermart.com', type: 'EMAIL', role: 'SHOPKEEPER' });
-
     const mRes = await request(app)
-      .post('/api/auth/verify-otp')
-      .send({ identifier: 'merchant1@aethermart.com', code: '123456', role: 'SHOPKEEPER', method: 'EMAIL' });
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-merchant1@aethermart.com',
+        role: 'SHOPKEEPER',
+      });
     merchantToken = mRes.body.data.token;
 
     // 2. Authenticate Rider
-    await request(app)
-      .post('/api/auth/send-otp')
-      .send({ identifier: 'rider-test-merchant-rider@aethermart.com', type: 'EMAIL', role: 'RIDER' });
-
     const rRes = await request(app)
-      .post('/api/auth/verify-otp')
-      .send({ identifier: 'rider-test-merchant-rider@aethermart.com', code: '123456', role: 'RIDER', method: 'EMAIL' });
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-rider-test-merchant-rider@aethermart.com',
+        role: 'RIDER',
+      });
     riderToken = rRes.body.data.token;
 
     // 3. Authenticate Customer
-    await request(app)
-      .post('/api/auth/send-otp')
-      .send({ identifier: 'customer-test-merchant-rider@aethermart.com', type: 'EMAIL', role: 'CUSTOMER' });
-
     const cRes = await request(app)
-      .post('/api/auth/verify-otp')
-      .send({ identifier: 'customer-test-merchant-rider@aethermart.com', code: '123456', role: 'CUSTOMER', method: 'EMAIL' });
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-customer-test-merchant-rider@aethermart.com',
+        role: 'CUSTOMER',
+      });
     customerToken = cRes.body.data.token;
   });
 

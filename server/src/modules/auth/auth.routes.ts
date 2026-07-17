@@ -3,7 +3,7 @@ import { authController } from './auth.controller';
 import { validate } from '../../common/middlewares/validate.middleware';
 import { authenticate } from '../../common/middlewares/auth.middleware';
 import { authRateLimiter, otpRateLimiter } from '../../common/middlewares/rateLimit.middleware';
-import { sendOtpSchema, verifyOtpSchema, completeProfileSchema } from './auth.validator';
+import { sendOtpSchema, verifyOtpSchema, completeProfileSchema, googleLoginSchema } from './auth.validator';
 
 const router = Router();
 
@@ -81,6 +81,8 @@ router.post('/send-otp', authRateLimiter, otpRateLimiter, validate(sendOtpSchema
  *         description: OTP invalid or expired
  */
 router.post('/verify-otp', authRateLimiter, validate(verifyOtpSchema), authController.verifyOtp);
+
+router.post('/google-login', authRateLimiter, validate(googleLoginSchema), authController.googleLogin);
 
 /**
  * @swagger

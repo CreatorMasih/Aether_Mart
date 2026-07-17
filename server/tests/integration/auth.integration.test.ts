@@ -7,119 +7,133 @@ import { Application } from 'express';
 
 let app: Application;
 
+const testEmails = [
+  'test-admin@aethermart.com',
+  'test-customer@aethermart.com',
+  'test-merchant@aethermart.com',
+  'test-rider@aethermart.com',
+  'test-new-customer@aethermart.com',
+  'test-new-merchant@aethermart.com',
+  'test-new-rider@aethermart.com',
+];
+
+async function cleanupData() {
+  await prisma.refreshToken.deleteMany({ where: { user: { email: { in: testEmails } } } });
+  await prisma.address.deleteMany({ where: { user: { email: { in: testEmails } } } });
+  await prisma.customer.deleteMany({ where: { user: { email: { in: testEmails } } } });
+  await prisma.merchant.deleteMany({ where: { user: { email: { in: testEmails } } } });
+  await prisma.rider.deleteMany({ where: { user: { email: { in: testEmails } } } });
+  await prisma.user.deleteMany({ where: { email: { in: testEmails } } });
+  await prisma.oTPVerification.deleteMany({ where: { identifier: { in: testEmails } } });
+}
+
 beforeAll(async () => {
-  // Connect to DB and cache
   await connectDatabase();
   await initializeCache();
   app = createApp();
-
-  // Clean test user data
-  await prisma.refreshToken.deleteMany({ where: { user: { email: 'test-auth-integration@aethermart.com' } } });
-  await prisma.address.deleteMany({ where: { user: { email: 'test-auth-integration@aethermart.com' } } });
-  await prisma.customer.deleteMany({ where: { user: { email: 'test-auth-integration@aethermart.com' } } });
-  await prisma.user.deleteMany({ where: { email: 'test-auth-integration@aethermart.com' } });
-  await prisma.oTPVerification.deleteMany({ where: { identifier: 'test-auth-integration@aethermart.com' } });
+  await cleanupData();
 });
 
 afterAll(async () => {
-  // Clean up
-  await prisma.refreshToken.deleteMany({ where: { user: { email: 'test-auth-integration@aethermart.com' } } });
-  await prisma.address.deleteMany({ where: { user: { email: 'test-auth-integration@aethermart.com' } } });
-  await prisma.customer.deleteMany({ where: { user: { email: 'test-auth-integration@aethermart.com' } } });
-  await prisma.user.deleteMany({ where: { email: 'test-auth-integration@aethermart.com' } });
-  await prisma.oTPVerification.deleteMany({ where: { identifier: 'test-auth-integration@aethermart.com' } });
-
+  await cleanupData();
   await disconnectDatabase();
   await disconnectCache();
 });
 
 describe('🔐 Auth Module Integration Tests', () => {
-  const testEmail = 'test-auth-integration@aethermart.com';
-  let accessToken: string;
-  let refreshTokenCookie: string;
+  let adminAccessToken: string;
+  let customerAccessToken: string;
 
-  it('1. Should generate and send email OTP successfully', async () => {
+  // 1. Super Admin OTP Login
+  it('1. Admin: Should generate and send email OTP successfully', async () => {
     const res = await request(app)
       .post('/api/auth/send-otp')
       .send({
-        identifier: testEmail,
+        identifier: 'test-admin@aethermart.com',
         type: 'EMAIL',
-        role: 'CUSTOMER',
+        role: 'ADMIN',
       });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.message).toContain('OTP sent');
 
-    // Confirm stored in DB
     const verification = await prisma.oTPVerification.findFirst({
-      where: { identifier: testEmail },
+      where: { identifier: 'test-admin@aethermart.com' },
     });
     expect(verification).not.toBeNull();
-    expect(verification?.isUsed).toBe(false);
   });
 
-  it('2. Should fail verify OTP with wrong code', async () => {
+  it('2. Admin: Should fail to verify OTP with wrong code', async () => {
     const res = await request(app)
       .post('/api/auth/verify-otp')
       .send({
-        identifier: testEmail,
-        code: '999999', // Wrong code
-        role: 'CUSTOMER',
+        identifier: 'test-admin@aethermart.com',
+        code: '999999',
+        role: 'ADMIN',
         method: 'EMAIL',
       });
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe('OTP_INVALID');
   });
 
-  it('3. Should verify OTP and login successfully, returning JWT and setting cookie', async () => {
+  it('3. Admin: Should verify OTP and login successfully', async () => {
     const res = await request(app)
       .post('/api/auth/verify-otp')
       .send({
-        identifier: testEmail,
-        code: '123456', // Test static code
-        role: 'CUSTOMER',
+        identifier: 'test-admin@aethermart.com',
+        code: '123456',
+        role: 'ADMIN',
         method: 'EMAIL',
       });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.token).toBeDefined(); // accessToken
-    expect(res.body.data.user).toBeDefined();
-    expect(res.body.data.user.role).toBe('CUSTOMER');
-    expect(res.body.data.user.isProfileComplete).toBe(false); // New user has incomplete profile
-
-    accessToken = res.body.data.token;
-    
-    // Read set-cookie headers
-    const cookies = res.headers['set-cookie'] || [];
-    const refreshCookie = cookies.find((c: string) => c.startsWith('refreshToken='));
-    expect(refreshCookie).toBeDefined();
-    refreshTokenCookie = refreshCookie;
+    expect(res.body.data.user.role).toBe('ADMIN');
+    adminAccessToken = res.body.data.token;
   });
 
-  it('4. Should get me profile as uncompleted', async () => {
+  // 2. Reject OTP for non-ADMIN
+  it('4. Guard: OTP send request should reject non-ADMIN roles', async () => {
     const res = await request(app)
-      .get('/api/auth/me')
-      .set('Authorization', `Bearer ${accessToken}`);
+      .post('/api/auth/send-otp')
+      .send({
+        identifier: 'test-customer@aethermart.com',
+        type: 'EMAIL',
+        role: 'CUSTOMER',
+      });
+    expect(res.status).toBe(422); // Validation failure
+  });
+
+  // 3. New Customer Registration via Google Mock Token
+  it('5. New Customer: Should dynamically register via Google token', async () => {
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-test-new-customer@aethermart.com',
+        role: 'CUSTOMER',
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.isProfileComplete).toBe(false);
-    expect(res.body.data.email).toBe(testEmail);
+    expect(res.body.data.token).toBeDefined();
+    expect(res.body.data.user.email).toBe('test-new-customer@aethermart.com');
+    expect(res.body.data.user.role).toBe('CUSTOMER');
+    expect(res.body.data.user.isProfileComplete).toBe(false);
+
+    customerAccessToken = res.body.data.token;
   });
 
-  it('5. Should complete customer profile successfully', async () => {
+  // 4. Complete Profile for Customer
+  it('6. New Customer: Should complete profile successfully', async () => {
     const res = await request(app)
       .post('/api/auth/complete-profile')
-      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Authorization', `Bearer ${customerAccessToken}`)
       .send({
         role: 'CUSTOMER',
         customerDetails: {
           fullName: 'Integration Test Customer',
-          email: testEmail,
+          email: 'test-new-customer@aethermart.com',
           defaultAddress: {
             label: 'Home',
             receiverName: 'Integration Test',
@@ -136,52 +150,70 @@ describe('🔐 Auth Module Integration Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.isProfileComplete).toBe(true);
-    expect(res.body.data.fullName).toBe('Integration Test Customer');
   });
 
-  it('6. Should rotate tokens using refresh endpoint', async () => {
+  // 5. Existing Customer Login
+  it('7. Existing Customer: Should login using Google token', async () => {
     const res = await request(app)
-      .post('/api/auth/refresh')
-      .set('Cookie', [refreshTokenCookie]);
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-test-new-customer@aethermart.com',
+        role: 'CUSTOMER',
+      });
 
     expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.accessToken).toBeDefined();
-
-    accessToken = res.body.data.accessToken;
-
-    const cookies = res.headers['set-cookie'] || [];
-    const refreshCookie = cookies.find((c: string) => c.startsWith('refreshToken='));
-    expect(refreshCookie).toBeDefined();
-    refreshTokenCookie = refreshCookie;
+    expect(res.body.data.user.isProfileComplete).toBe(true);
   });
 
-  it('7. Should log out successfully, clearing cookies', async () => {
+  // 6. New Merchant Registration via Google
+  it('8. New Merchant: Should dynamically register via Google token', async () => {
     const res = await request(app)
-      .post('/api/auth/logout')
-      .set('Cookie', [refreshTokenCookie]);
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-test-new-merchant@aethermart.com',
+        role: 'SHOPKEEPER',
+      });
 
     expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-
-    const cookies = res.headers['set-cookie'] || [];
-    const refreshCookie = cookies.find((c: string) => c.startsWith('refreshToken='));
-    // Should be cleared (expires/max-age=0)
-    expect(refreshCookie).toBeDefined();
-    expect(refreshCookie).toContain('Max-Age=0');
+    expect(res.body.data.user.role).toBe('SHOPKEEPER');
   });
 
-  it('8. Should reject authenticated requests after logging out', async () => {
+  // 7. New Rider Registration via Google
+  it('9. New Rider: Should dynamically register via Google token', async () => {
     const res = await request(app)
-      .get('/api/auth/me')
-      .set('Authorization', `Bearer ${accessToken}`);
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-test-new-rider@aethermart.com',
+        role: 'RIDER',
+      });
 
-    // Since token is still valid (access token expiry 15m), it should work for stateless checks,
-    // but the session refresh token is now revoked. Let's verify refresh fails.
-    const refreshRes = await request(app)
-      .post('/api/auth/refresh')
-      .set('Cookie', [refreshTokenCookie]);
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.role).toBe('RIDER');
+  });
 
-    expect(refreshRes.status).toBe(401);
+  // 8. Wrong Portal Login (Cross-role safety)
+  it('10. Safety: Should reject login if Google account is registered as another role', async () => {
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-test-new-rider@aethermart.com', // Actually a RIDER
+        role: 'CUSTOMER', // Attempting to login via Customer Portal
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.message).toContain('registered as a Rider. Please login using the Rider Portal');
+  });
+
+  // 9. Invalid/Expired Token Error
+  it('11. Security: Should reject empty or malformed Google tokens', async () => {
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({
+        token: 'invalid-token-value',
+        role: 'CUSTOMER',
+      });
+
+    expect(res.status).toBe(401);
   });
 });

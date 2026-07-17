@@ -30,12 +30,18 @@ export const useAuthStore = create<AuthState>()(
         activeRole: user.role,
       }),
       
-      clearSession: () => set({
-        user: null,
-        accessToken: null,
-        isAuthenticated: false,
-        activeRole: null,
-      }),
+      clearSession: () => {
+        // Fire-and-forget backend logout to revoke refresh token and clear cookie
+        import('../services/auth-service').then(({ authService }) => {
+          authService.logout().catch(() => {});
+        });
+        set({
+          user: null,
+          accessToken: null,
+          isAuthenticated: false,
+          activeRole: null,
+        });
+      },
       
       updateWalletBalance: (newBalance) => set((state) => ({
         user: state.user ? { ...state.user, walletBalance: newBalance } : null,

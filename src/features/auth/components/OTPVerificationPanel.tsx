@@ -29,6 +29,24 @@ export const OTPVerificationPanel: React.FC<OTPVerificationPanelProps> = ({
 
   const lastVerifiedOtpRef = useRef<string>('');
 
+  // Guard: Only ADMIN role should access OTP verification.
+  if (role !== 'ADMIN') {
+    return (
+      <div className="w-full max-w-sm mx-auto text-center py-6 space-y-4">
+        <h2 className="text-xl font-bold text-status-error">Access Restricted</h2>
+        <p className="text-sm text-text-secondary">
+          OTP verification is only available for Administrators. Please use Google authentication instead.
+        </p>
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-brand-emerald text-white rounded-lg hover:bg-brand-emerald-hover text-sm font-semibold cursor-pointer"
+        >
+          Back to Login
+        </button>
+      </div>
+    );
+  }
+
   // Handle countdown timer decrement
   useEffect(() => {
     if (timer <= 0) return;
