@@ -31,16 +31,36 @@ export const useAuthStore = create<AuthState>()(
       }),
       
       clearSession: () => {
-        // Fire-and-forget backend logout to revoke refresh token and clear cookie
+        // 1. Trigger backend logout to revoke refresh token and clear cookie
         import('../services/auth-service').then(({ authService }) => {
           authService.logout().catch(() => {});
         });
+        
+        // 2. Disconnect Socket.IO client
+        import('../../../core/socket/socket-service').then(({ socketService }) => {
+          socketService.disconnect();
+        }).catch(() => {});
+
+        // 3. Clear React Query cache
+        import('../../../core/network/QueryProvider').then(({ queryClient }) => {
+          queryClient.clear();
+        }).catch(() => {});
+
+        // 4. Reset Zustand state
         set({
           user: null,
           accessToken: null,
           isAuthenticated: false,
           activeRole: null,
         });
+
+        // 5. Clear localStorage and sessionStorage
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch (e) {
+          console.error('Error clearing storage:', e);
+        }
       },
       
       updateWalletBalance: (newBalance) => set((state) => ({

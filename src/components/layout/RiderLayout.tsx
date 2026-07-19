@@ -1,16 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Navigation, LogOut } from 'lucide-react';
+import { LayoutDashboard, Navigation, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '../../features/auth/store/auth-store';
 import { useToast } from '../../hooks/useToast';
+import { useTheme } from '../../core/theme/useTheme';
 import { cn } from '../../utils/cn';
+import { LogoutConfirmationModal } from '../ui/LogoutConfirmationModal';
 
 export const RiderLayout: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { clearSession } = useAuthStore();
+  const { user, clearSession } = useAuthStore();
+  const { theme, setTheme } = useTheme();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogoutConfirm = () => {
     clearSession();
     showToast({
       type: 'success',
@@ -25,16 +29,33 @@ export const RiderLayout: React.FC = () => {
       {/* Mobile rider status header */}
       <header className="sticky top-0 z-sticky bg-bg-secondary border-b border-border-primary px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="font-heading font-extrabold text-md text-brand-emerald">Aether Mart</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-emerald/10 text-brand-emerald font-semibold uppercase tracking-wider">Rider</span>
+          <div className="h-8 w-8 rounded-full bg-status-warning text-white flex items-center justify-center font-heading font-extrabold text-xs uppercase flex-shrink-0">
+            {user?.fullName?.charAt(0) || user?.phone?.charAt(0) || 'R'}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-bold text-text-primary leading-tight truncate">{user?.fullName || 'Delivery Partner'}</span>
+            <span className="text-[9px] text-text-secondary font-semibold leading-none mt-0.5">Rider</span>
+          </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="p-1.5 border border-status-error/20 rounded-lg text-status-error hover:bg-status-error/5 cursor-pointer"
-          title="Logout"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
+
+        <div className="flex items-center gap-1.5">
+          {/* Appearance Toggle */}
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-1.5 border border-border-primary rounded-lg text-text-secondary hover:bg-bg-tertiary cursor-pointer transition-all"
+            title="Toggle Appearance"
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4 text-brand-emerald" /> : <Moon className="h-4 w-4 text-brand-emerald" />}
+          </button>
+          
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="p-1.5 border border-status-error/20 rounded-lg text-status-error hover:bg-status-error/5 cursor-pointer transition-all"
+            title="Logout"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
       </header>
 
       {/* Touch action content panel */}
@@ -66,6 +87,12 @@ export const RiderLayout: React.FC = () => {
           Navigator
         </NavLink>
       </nav>
+
+      <LogoutConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogoutConfirm}
+      />
     </div>
   );
 };

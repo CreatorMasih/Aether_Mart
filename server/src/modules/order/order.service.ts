@@ -237,7 +237,7 @@ export class OrderService {
       }
 
       return createdOrders;
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     // 10. Clear Customer Cart if checking out from DB cart
     if (clearCartAfterPlacement) {
@@ -322,7 +322,7 @@ export class OrderService {
 
         return { order: updatedOrder, payment: updatedPayment };
       }
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     // Emit Events
     if (status === 'SUCCESS') {
@@ -404,7 +404,7 @@ export class OrderService {
         data: { status, paymentStatus },
         include: { store: true, items: true },
       });
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     // Emit event matching transition
     let eventName = OrderEvent.CONFIRMED;
@@ -473,7 +473,7 @@ export class OrderService {
       }
 
       return orderRef;
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     return updated;
   }
@@ -510,7 +510,7 @@ export class OrderService {
             },
           });
         }
-      });
+      }, { maxWait: 15000, timeout: 15000 });
 
       log.info(`Awarded ${pointsEarned} loyalty points to customer ${customerId}`);
     } catch (error: any) {

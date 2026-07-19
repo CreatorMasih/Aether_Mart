@@ -8,6 +8,15 @@ import { ThemeProvider } from './core/theme/ThemeProvider';
 import { ToastProvider } from './context/ToastProvider';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { AppRouter } from './router';
+import { useAuthStore } from './features/auth/store/auth-store';
+
+// Synchronize logout across multiple browser tabs
+window.addEventListener('storage', (event) => {
+  if (event.key === 'aether-auth-storage' && !event.newValue) {
+    useAuthStore.getState().clearSession();
+    window.location.href = '/';
+  }
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

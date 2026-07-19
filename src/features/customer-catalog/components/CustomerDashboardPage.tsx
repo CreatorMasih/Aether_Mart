@@ -21,6 +21,7 @@ import {
   Gift
 } from 'lucide-react';
 import { useAuthStore } from '../../auth/store/auth-store';
+import { LogoutConfirmationModal } from '../../../components/ui/LogoutConfirmationModal';
 import { useCustomerStore } from '../store/customer-store';
 import { useTheme } from '../../../core/theme/useTheme';
 import { queryKeys } from '../../../core/network/queryKeys';
@@ -88,7 +89,13 @@ export const CustomerDashboardPage: React.FC = () => {
     });
   };
 
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = () => {
     clearSession();
     showToast({
       type: 'success',
@@ -763,6 +770,12 @@ export const CustomerDashboardPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <LogoutConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogoutConfirm}
+      />
 
     </motion.div>
   );

@@ -59,6 +59,7 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         // Refresh token failed -> Force user logout
         useAuthStore.getState().clearSession();
+        window.location.href = '/auth';
         return Promise.reject(refreshError);
       }
     }

@@ -207,8 +207,14 @@ model Address {
   receiverPhone  String
   streetAddress  String
   apartmentSuite String?
+  houseNumber    String?
+  street         String?
+  landmark       String?
   postalCode     String
   city           String
+  district       String?
+  state          String?
+  country        String?      @default("India")
   latitude       Float
   longitude      Float
   isDefault      Boolean      @default(false)

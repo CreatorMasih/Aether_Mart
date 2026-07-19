@@ -39,8 +39,32 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
 export const OnboardingScreen: React.FC = () => {
   const [activeSlide, setActiveSlide] = useState<number>(0);
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const { setActiveRole } = useAuthStore();
+  const { isAuthenticated, user, setActiveRole } = useAuthStore();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (isAuthenticated && user) {
+      if (!user.fullName && user.role !== 'ADMIN') {
+        navigate('/auth/profile-setup');
+      } else {
+        switch (user.role) {
+          case 'SHOPKEEPER':
+            navigate('/m/dashboard');
+            break;
+          case 'RIDER':
+            navigate('/r/dashboard');
+            break;
+          case 'ADMIN':
+            navigate('/a/dashboard');
+            break;
+          case 'CUSTOMER':
+          default:
+            navigate('/c/home');
+            break;
+        }
+      }
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleNextSlide = () => {
     if (activeSlide < ONBOARDING_SLIDES.length - 1) {

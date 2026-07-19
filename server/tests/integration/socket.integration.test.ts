@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { createServer, Server as HttpServer } from 'http';
 import { io as Client, Socket as ClientSocket } from 'socket.io-client';
 import { createApp } from '../../src/config/app.config';
@@ -23,7 +23,7 @@ let riderId: string;
 const openSockets: ClientSocket[] = [];
 
 function createClientSocket(token: string): ClientSocket {
-  const socket = Client(`http://localhost:${port}`, {
+  const socket = Client(`http://127.0.0.1:${port}`, {
     auth: { token: `Bearer ${token}` },
     autoConnect: false,
   });
@@ -211,10 +211,23 @@ afterAll(async () => {
   await disconnectCache();
 });
 
+afterEach(() => {
+  // Clear all listeners on orderEventEmitter to prevent event leakage between tests
+  orderEventEmitter.removeAllListeners();
+  
+  // Disconnect all sockets and clean up listeners
+  for (const socket of openSockets) {
+    if (socket.connected) {
+      socket.disconnect();
+    }
+    socket.removeAllListeners();
+  }
+});
+
 describe('⚡ Socket.IO Real-time Gateway Integration Tests', () => {
   it('Should fail connection without token authentication', () => {
     return new Promise<void>((resolve) => {
-      const socket = Client(`http://localhost:${port}`, {
+      const socket = Client(`http://127.0.0.1:${port}`, {
         autoConnect: false,
       });
       openSockets.push(socket);
@@ -230,7 +243,7 @@ describe('⚡ Socket.IO Real-time Gateway Integration Tests', () => {
 
   it('Should fail connection with an invalid token authentication', () => {
     return new Promise<void>((resolve) => {
-      const socket = Client(`http://localhost:${port}`, {
+      const socket = Client(`http://127.0.0.1:${port}`, {
         auth: { token: 'Bearer invalid-token-string' },
         autoConnect: false,
       });
@@ -259,19 +272,28 @@ describe('⚡ Socket.IO Real-time Gateway Integration Tests', () => {
   });
 
   it('Should allow client to join/leave order tracking room and receive live updates', () => {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       const customerSocket = createClientSocket(customerToken);
       const mockOrderId = 'mock-order-uuid-1234';
 
+      console.log('--- TEST 4: Connecting customerSocket...');
       customerSocket.connect();
 
+      customerSocket.on('connect_error', (err) => {
+        console.error('--- TEST 4: customerSocket connect_error:', err);
+        reject(err);
+      });
+
       customerSocket.on('connect', () => {
+        console.log('--- TEST 4: customerSocket connected successfully. Emitting order:track...');
         // Track order
         customerSocket.emit('order:track', { orderId: mockOrderId }, (ack: any) => {
+          console.log('--- TEST 4: order:track ack received:', ack);
           expect(ack.success).toBe(true);
           expect(ack.message).toContain('Started tracking');
 
           // Trigger simulated domain event
+          console.log('--- TEST 4: Emitting OrderEvent.CONFIRMED...');
           orderEventEmitter.emitEvent(OrderEvent.CONFIRMED, {
             order: {
               id: mockOrderId,
@@ -285,6 +307,7 @@ describe('⚡ Socket.IO Real-time Gateway Integration Tests', () => {
       });
 
       customerSocket.on('order:status_update', (data: any) => {
+        console.log('--- TEST 4: order:status_update received:', data);
         expect(data.orderId).toBe(mockOrderId);
         expect(data.status).toBe('CONFIRMED');
         expect(data.event).toBe(OrderEvent.CONFIRMED);

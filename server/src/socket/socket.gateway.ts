@@ -112,43 +112,45 @@ export async function initializeSocket(server: http.Server): Promise<Server> {
     // Join general user room
     socket.join(`user:${userId}`);
 
-    // Role-specific rooms config
-    try {
-      if (role === 'CUSTOMER') {
-        const customer = await prisma.customer.findUnique({ where: { userId } });
-        if (customer) {
-          socket.data.customerId = customer.id;
-          socket.join(`customer:${customer.id}`);
-          socket.join('customers');
-          logger.info(`Customer socket joined room: customer:${customer.id}`);
+    // Role-specific rooms config (non-blocking)
+    (async () => {
+      try {
+        if (role === 'CUSTOMER') {
+          const customer = await prisma.customer.findUnique({ where: { userId } });
+          if (customer) {
+            socket.data.customerId = customer.id;
+            socket.join(`customer:${customer.id}`);
+            socket.join('customers');
+            logger.info(`Customer socket joined room: customer:${customer.id}`);
+          }
+        } else if (role === 'SHOPKEEPER') {
+          const merchant = await prisma.merchant.findFirst({
+            where: { userId, deletedAt: null },
+            include: { store: true },
+          });
+          if (merchant?.store) {
+            socket.data.merchantId = merchant.id;
+            socket.data.storeId = merchant.store.id;
+            socket.join(`store:${merchant.store.id}`);
+            socket.join('merchants');
+            logger.info(`Merchant socket joined room: store:${merchant.store.id}`);
+          }
+        } else if (role === 'RIDER') {
+          const rider = await prisma.rider.findUnique({ where: { userId } });
+          if (rider) {
+            socket.data.riderId = rider.id;
+            socket.join(`rider:${rider.id}`);
+            socket.join('riders');
+            logger.info(`Rider socket joined room: rider:${rider.id}`);
+          }
+        } else if (role === 'ADMIN') {
+          socket.join('admins');
+          logger.info('Admin socket joined room: admins');
         }
-      } else if (role === 'SHOPKEEPER') {
-        const merchant = await prisma.merchant.findFirst({
-          where: { userId, deletedAt: null },
-          include: { store: true },
-        });
-        if (merchant?.store) {
-          socket.data.merchantId = merchant.id;
-          socket.data.storeId = merchant.store.id;
-          socket.join(`store:${merchant.store.id}`);
-          socket.join('merchants');
-          logger.info(`Merchant socket joined room: store:${merchant.store.id}`);
-        }
-      } else if (role === 'RIDER') {
-        const rider = await prisma.rider.findUnique({ where: { userId } });
-        if (rider) {
-          socket.data.riderId = rider.id;
-          socket.join(`rider:${rider.id}`);
-          socket.join('riders');
-          logger.info(`Rider socket joined room: rider:${rider.id}`);
-        }
-      } else if (role === 'ADMIN') {
-        socket.join('admins');
-        logger.info('Admin socket joined room: admins');
+      } catch (error) {
+        logger.error(`Error setting up roles rooms for socket ${socket.id}`, { error });
       }
-    } catch (error) {
-      logger.error(`Error setting up roles rooms for socket ${socket.id}`, { error });
-    }
+    })();
 
     // ─── Socket Events ──────────────────────────────────────────────────────────
 

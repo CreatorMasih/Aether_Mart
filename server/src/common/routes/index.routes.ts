@@ -53,4 +53,8 @@ router.use('/rider', riderRoutes);
 import adminRoutes from '../../modules/admin/admin.routes';
 router.use('/admin', adminRoutes);
 
+// ── Postal Autocomplete / Lookup ──────────────────────────────────────────────
+import postalRoutes from '../../modules/postal/postal.routes';
+router.use('/postal', postalRoutes);
+
 export default router;
