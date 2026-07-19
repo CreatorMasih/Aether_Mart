@@ -66,7 +66,11 @@ function setupDomainEventListeners(): void {
 export async function initializeSocket(server: http.Server): Promise<Server> {
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      origin: [
+        process.env.FRONTEND_URL || 'http://localhost:5173',
+        'http://localhost:5173',
+        'https://aether-mart-six.vercel.app',
+      ],
       methods: ['GET', 'POST'],
       credentials: true,
     },

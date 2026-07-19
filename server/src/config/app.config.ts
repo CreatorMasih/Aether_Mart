@@ -34,6 +34,7 @@ export function createApp(): Application {
           process.env.FRONTEND_URL || 'http://localhost:5173',
           'http://localhost:5173',
           'http://localhost:3000',
+          'https://aether-mart-six.vercel.app',
         ];
 
         // Allow requests with no origin (e.g. Postman, curl, mobile apps)
