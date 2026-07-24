@@ -76,7 +76,7 @@ export const MerchantDashboard: React.FC = () => {
   // Store Availability Quick Toggles
   const updateStatusMutation = useMutation({
     mutationFn: async (payload: any) => {
-      const res = await apiClient.patch('/merchant/profile', payload);
+      const res = await apiClient.put('/merchant/profile', payload);
       return res.data.data;
     },
     onSuccess: () => {

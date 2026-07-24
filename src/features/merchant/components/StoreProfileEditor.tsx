@@ -6,6 +6,7 @@ import {
   Sun,
   Save,
 } from 'lucide-react';
+import { queryKeys } from '../../../core/network/queryKeys';
 import { apiClient } from '../../../core/network/api-client';
 import { useToast } from '../../../hooks/useToast';
 import { cn } from '../../../utils/cn';
@@ -40,6 +41,10 @@ export const StoreProfileEditor: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [isHoliday, setIsHoliday] = useState(false);
 
+  // Location Coordinates
+  const [latitude, setLatitude] = useState<number | ''>(12.9716);
+  const [longitude, setLongitude] = useState<number | ''>(77.5946);
+
   // Business & Financials
   const [gstNumber, setGstNumber] = useState('');
   const [panNumber, setPanNumber] = useState('');
@@ -54,6 +59,8 @@ export const StoreProfileEditor: React.FC = () => {
       setLogoUrl(store.logoUrl || '🥬');
       setBannerUrl(store.bannerUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e');
       setAddress(store.address || '');
+      setLatitude(store.latitude ?? 12.9716);
+      setLongitude(store.longitude ?? 77.5946);
       setDeliveryRadiusKm(store.deliveryRadiusKm ?? 5);
       setMinimumOrderValue(store.minimumOrderValue ?? 100);
       setOpeningTime(store.openingTime || '08:00');
@@ -75,11 +82,12 @@ export const StoreProfileEditor: React.FC = () => {
 
   const updateStoreMutation = useMutation({
     mutationFn: async (payload: any) => {
-      const res = await apiClient.patch('/merchant/profile', payload);
+      const res = await apiClient.put('/merchant/profile', payload);
       return res.data.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
       showToast({
         type: 'success',
         title: 'Profile Updated',
@@ -113,6 +121,8 @@ export const StoreProfileEditor: React.FC = () => {
       logoUrl,
       bannerUrl,
       address: address.trim(),
+      latitude: Number(latitude) || 12.9716,
+      longitude: Number(longitude) || 77.5946,
       deliveryRadiusKm: Number(deliveryRadiusKm) || 5,
       minimumOrderValue: Number(minimumOrderValue) || 0,
       openingTime,

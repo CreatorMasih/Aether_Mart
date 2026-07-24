@@ -89,8 +89,9 @@ export class CatalogService {
             { latitude: query.latitude!, longitude: query.longitude! },
             { latitude: store.latitude, longitude: store.longitude }
           );
-          // Filter stores within maximum distance and store's own delivery range
-          return dist <= (query.maxDistanceKm || 5) && dist <= store.deliveryRadiusKm;
+          // Filter stores within maximum distance, store's own delivery range, and active status
+          const isOperational = store.isOpen && !store.isPaused && !store.isHoliday;
+          return dist <= (query.maxDistanceKm || 10) && dist <= store.deliveryRadiusKm && isOperational;
         })
         .map((store) => store.id);
 
@@ -236,7 +237,7 @@ export class CatalogService {
             ...store,
             distance,
             estimatedDeliveryTime: store.deliveryTimeMins + Math.ceil(distance * 3), // 3 mins per km
-            available: distance <= store.deliveryRadiusKm,
+            available: distance <= store.deliveryRadiusKm && store.isOpen && !store.isPaused && !store.isHoliday,
           };
         })
         .filter((s) => s.available)

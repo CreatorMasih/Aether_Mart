@@ -10,6 +10,7 @@ router.use(authenticate);
 
 // Profile
 router.put('/profile', requireMerchant, merchantController.updateProfile);
+router.patch('/profile', requireMerchant, merchantController.updateProfile);
 router.delete('/profile/:id', requireMerchantOrAdmin, merchantController.softDeleteMerchant);
 
 // Dashboard & Analytics

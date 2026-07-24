@@ -23,21 +23,32 @@ export class MerchantService {
     userId: string,
     params: {
       fullName?: string;
+      ownerName?: string;
       gstNumber?: string;
       panNumber?: string;
       fssaiNumber?: string;
       storeName?: string;
+      name?: string;
       storeAddress?: string;
+      address?: string;
       latitude?: number;
       longitude?: number;
       deliveryRadiusKm?: number;
       openingTime?: string;
       closingTime?: string;
+      isOpen?: boolean;
+      isPaused?: boolean;
       isHoliday?: boolean;
       minimumOrderValue?: number;
       deliveryFee?: number;
       bankAccount?: string;
       bankName?: string;
+      logoUrl?: string;
+      bannerUrl?: string;
+      upiId?: string;
+      contactPhone?: string;
+      contactEmail?: string;
+      businessType?: string;
     }
   ): Promise<any> {
     const merchant = await merchantRepository.findMerchantByUserId(userId);
@@ -45,35 +56,51 @@ export class MerchantService {
 
     const result = await merchantRepository.prisma.$transaction(async (tx) => {
       // 1. Update Merchant info
+      const merchantData: any = {};
+      if (params.fullName !== undefined || params.ownerName !== undefined) {
+        merchantData.fullName = params.fullName ?? params.ownerName;
+      }
+      if (params.gstNumber !== undefined) merchantData.gstNumber = params.gstNumber;
+      if (params.panNumber !== undefined) merchantData.panNumber = params.panNumber;
+      if (params.fssaiNumber !== undefined) merchantData.fssaiNumber = params.fssaiNumber;
+      if (params.bankAccount !== undefined) merchantData.bankAccount = params.bankAccount;
+      if (params.bankName !== undefined) merchantData.bankName = params.bankName;
+
       const updatedMerchant = await tx.merchant.update({
         where: { id: merchant.id },
-        data: {
-          fullName: params.fullName,
-          gstNumber: params.gstNumber,
-          panNumber: params.panNumber,
-          fssaiNumber: params.fssaiNumber,
-          bankAccount: params.bankAccount,
-          bankName: params.bankName,
-        },
+        data: merchantData,
       });
 
       // 2. Update Store info
       let updatedStore = null;
       if (merchant.store) {
+        const storeData: any = {};
+        if (params.storeName !== undefined || params.name !== undefined) {
+          storeData.name = params.storeName ?? params.name;
+        }
+        if (params.storeAddress !== undefined || params.address !== undefined) {
+          storeData.address = params.storeAddress ?? params.address;
+        }
+        if (params.latitude !== undefined) storeData.latitude = params.latitude;
+        if (params.longitude !== undefined) storeData.longitude = params.longitude;
+        if (params.deliveryRadiusKm !== undefined) storeData.deliveryRadiusKm = params.deliveryRadiusKm;
+        if (params.openingTime !== undefined) storeData.openingTime = params.openingTime;
+        if (params.closingTime !== undefined) storeData.closingTime = params.closingTime;
+        if (params.isOpen !== undefined) storeData.isOpen = params.isOpen;
+        if (params.isPaused !== undefined) storeData.isPaused = params.isPaused;
+        if (params.isHoliday !== undefined) storeData.isHoliday = params.isHoliday;
+        if (params.minimumOrderValue !== undefined) storeData.minimumOrderValue = params.minimumOrderValue;
+        if (params.deliveryFee !== undefined) storeData.deliveryFee = params.deliveryFee;
+        if (params.logoUrl !== undefined) storeData.logoUrl = params.logoUrl;
+        if (params.bannerUrl !== undefined) storeData.bannerUrl = params.bannerUrl;
+        if (params.upiId !== undefined) storeData.upiId = params.upiId;
+        if (params.contactPhone !== undefined) storeData.contactPhone = params.contactPhone;
+        if (params.contactEmail !== undefined) storeData.contactEmail = params.contactEmail;
+        if (params.businessType !== undefined) storeData.businessType = params.businessType;
+
         updatedStore = await tx.store.update({
           where: { id: merchant.store.id },
-          data: {
-            name: params.storeName,
-            address: params.storeAddress,
-            latitude: params.latitude,
-            longitude: params.longitude,
-            deliveryRadiusKm: params.deliveryRadiusKm,
-            openingTime: params.openingTime,
-            closingTime: params.closingTime,
-            isHoliday: params.isHoliday,
-            minimumOrderValue: params.minimumOrderValue,
-            deliveryFee: params.deliveryFee,
-          },
+          data: storeData,
         });
       }
 

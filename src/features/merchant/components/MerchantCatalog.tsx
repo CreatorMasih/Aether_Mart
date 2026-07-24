@@ -410,7 +410,12 @@ export const MerchantCatalog: React.FC = () => {
           {filteredProducts.map((p: any) => {
             const firstVariant = p.variants?.[0];
             const stockQty = firstVariant?.stock ?? p.stock ?? 0;
-            const primaryImg = p.images?.find((img: any) => img.isPrimary)?.url || p.images?.[0]?.url || 'https://images.unsplash.com/photo-1542838132-92c53300491e';
+            const primaryImg =
+              p.images?.find((img: any) => img.isPrimary)?.url ||
+              p.images?.[0]?.url ||
+              p.imageUrl ||
+              p.variants?.[0]?.images?.[0]?.url ||
+              'https://images.unsplash.com/photo-1542838132-92c53300491e';
 
             return (
               <div
@@ -421,7 +426,7 @@ export const MerchantCatalog: React.FC = () => {
                   <img
                     src={primaryImg}
                     alt={p.name}
-                    className="w-16 h-16 rounded-xl object-cover border border-border shrink-0"
+                    className="w-16 h-16 rounded-xl object-cover border border-border shrink-0 bg-surface-subtle"
                   />
                   <div className="flex-1 min-w-0 space-y-1">
                     <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-md uppercase">
@@ -471,15 +476,15 @@ export const MerchantCatalog: React.FC = () => {
         </div>
       )}
 
-      {/* SIMPLIFIED ADD PRODUCT MODAL */}
+      {/* HIGH CONTRAST ADD PRODUCT MODAL */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-2xl bg-surface border border-border rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-2xl bg-surface border-2 border-border/80 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div>
