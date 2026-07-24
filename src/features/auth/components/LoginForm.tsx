@@ -77,7 +77,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
               width: btnElem.clientWidth || 384,
             });
           }
-          googleObj.accounts.id.prompt();
         }
       };
 

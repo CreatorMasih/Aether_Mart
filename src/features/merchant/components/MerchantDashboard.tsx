@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  TrendingUp, 
-  ShoppingBag, 
-  CheckCircle, 
-  AlertTriangle, 
-  DollarSign, 
-  Sliders,
-  DollarSign as BankIcon
+import React from 'react';
+import {
+  TrendingUp,
+  CheckCircle2,
+  AlertTriangle,
+  DollarSign,
+  Store as StoreIcon,
+  PauseCircle,
+  CheckSquare,
+  Square,
+  Package,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../core/network/queryKeys';
@@ -16,28 +18,21 @@ import { useToast } from '../../../hooks/useToast';
 import { formatCurrency } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 
+interface SetupTask {
+  id: string;
+  label: string;
+  isDone: boolean;
+  link: string;
+}
+
 export const MerchantDashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const [activeChartTab, setActiveChartTab] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
-  
-  // Local Settings form state
-  const [storeName, setStoreName] = useState('');
-  const [radius, setRadius] = useState(5);
-  const [minOrder, setMinOrder] = useState(0);
-  const [holidayMode, setHolidayMode] = useState(false);
-  const [bankAccount, setBankAccount] = useState('');
-  const [bankName, setBankName] = useState('');
 
-  // 1. Queries
+  // Queries
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: queryKeys.merchantDashboard(),
     queryFn: () => merchantService.getDashboardStats(),
-  });
-
-  const { data: payoutHistoryData } = useQuery({
-    queryKey: queryKeys.merchantPayouts(),
-    queryFn: () => merchantService.getPayouts(),
   });
 
   const { data: profileMe } = useQuery({
@@ -45,13 +40,12 @@ export const MerchantDashboard: React.FC = () => {
     queryFn: async () => {
       const res = await apiClient.get('/auth/me');
       return res.data.data;
-    }
+    },
   });
 
   const store = profileMe?.profile?.store;
   const merchant = profileMe?.profile;
 
-  // 2. Fetch products to get names of low/out stock alerts
   const { data: productsData } = useQuery({
     queryKey: queryKeys.merchantProducts(store?.id || ''),
     queryFn: async () => {
@@ -61,370 +55,209 @@ export const MerchantDashboard: React.FC = () => {
     enabled: !!store?.id,
   });
 
-  // Sync settings form state when profile loads
-  useEffect(() => {
-    if (store) {
-      setStoreName(store.name || '');
-      setRadius(store.deliveryRadiusKm || 5);
-      setMinOrder(store.minimumOrderValue || 0);
-      setHolidayMode(store.isHoliday || false);
-    }
-    if (merchant) {
-      setBankAccount(merchant.bankAccount || '');
-      setBankName(merchant.bankName || '');
-    }
-  }, [store, merchant]);
+  const productsList = productsData ?? [];
+  const lowStockCount = productsList.filter((p: any) => p.stock > 0 && p.stock <= 5).length;
+  const outOfStockCount = productsList.filter((p: any) => p.stock === 0).length;
 
-  // 3. Settings update Mutation
-  const updateSettingsMutation = useMutation({
-    mutationFn: (params: Parameters<typeof merchantService.updateProfile>[0]) =>
-      merchantService.updateProfile(params),
+  // Onboarding Setup Checklist Calculation
+  const setupTasks: SetupTask[] = [
+    { id: 'profile', label: 'Complete Store Profile', isDone: !!store?.name, link: '/merchant/profile' },
+    { id: 'logo', label: 'Upload Store Logo & Banner', isDone: !!store?.logoUrl, link: '/merchant/profile' },
+    { id: 'location', label: 'Set Physical Store Address', isDone: !!store?.address, link: '/merchant/profile' },
+    { id: 'radius', label: 'Configure Delivery Radius', isDone: (store?.deliveryRadiusKm || 0) > 0, link: '/merchant/profile' },
+    { id: 'product', label: 'Add Your First Product', isDone: productsList.length > 0, link: '/merchant/catalog' },
+    { id: 'payment', label: 'Configure Bank Account / UPI', isDone: !!merchant?.bankAccount || !!store?.upiId, link: '/merchant/profile' },
+    { id: 'timings', label: 'Set Operating Hours', isDone: !!store?.openingTime, link: '/merchant/profile' },
+  ];
+
+  const completedCount = setupTasks.filter((t) => t.isDone).length;
+  const completionPercentage = Math.round((completedCount / setupTasks.length) * 100);
+
+  // Store Availability Quick Toggles
+  const updateStatusMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await apiClient.patch('/merchant/profile', payload);
+      return res.data.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
-      showToast({
-        type: 'success',
-        title: 'Settings Saved',
-        description: 'Store configurations updated successfully.',
-      });
+      showToast({ type: 'success', title: 'Status Updated', description: 'Store operating mode changed.' });
     },
-    onError: (err: any) => {
-      showToast({
-        type: 'error',
-        title: 'Save Failed',
-        description: err.message || 'Unable to save settings.',
-      });
-    }
   });
 
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateSettingsMutation.mutate({
-      storeName,
-      deliveryRadiusKm: radius,
-      minimumOrderValue: minOrder,
-      isHoliday: holidayMode,
-      bankAccount,
-      bankName,
-    });
-  };
-
-  const payoutsList = payoutHistoryData ?? [];
-  const productsList = productsData ?? [];
-  const lowStockProducts = productsList.filter((p: any) => p.stock > 0 && p.stock <= 5);
-  const outOfStockProducts = productsList.filter((p: any) => p.stock === 0);
-
-  const totalRevenue = stats?.totalRevenue ?? 0;
-  const completedOrdersCount = stats?.completedOrdersCount ?? 0;
-  const activeOrdersCount = stats?.activeOrdersCount ?? 0;
   const chartData = stats?.chartData ?? [
-    { label: '08:00', val: 0 },
-    { label: '11:00', val: 0 },
-    { label: '14:00', val: 0 },
-    { label: '17:00', val: 0 },
-    { label: '20:00', val: 0 },
-    { label: '23:00', val: 0 }
+    { label: 'Mon', val: 1200 },
+    { label: 'Tue', val: 2400 },
+    { label: 'Wed', val: 1800 },
+    { label: 'Thu', val: 3100 },
+    { label: 'Fri', val: 4500 },
+    { label: 'Sat', val: 5200 },
+    { label: 'Sun', val: 6100 },
   ];
+
+  const maxVal = Math.max(...chartData.map((d) => d.val), 100);
 
   if (statsLoading) {
     return (
-      <div className="flex h-64 items-center justify-center text-xs font-semibold text-text-secondary select-none">
-        Loading merchant analytics logs...
+      <div className="space-y-4 p-4 animate-pulse">
+        <div className="h-8 bg-border/40 rounded-xl w-48" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="h-28 bg-border/30 rounded-2xl" />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-12 text-xs font-semibold text-text-secondary select-none">
-      
-      {/* 1. Metric summaries cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        
-        {/* Today's Sales */}
-        <div className="p-4 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-28">
-          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
-            <DollarSign className="h-4 w-4 text-brand-emerald" />
-            Today's revenue
-          </span>
-          <div className="mt-1">
-            <span className="text-xl font-extrabold text-text-primary font-heading">
-              {formatCurrency(totalRevenue)}
-            </span>
-            <p className="text-[9px] text-brand-emerald font-bold mt-0.5 uppercase tracking-wider flex items-center gap-0.5">
-              <TrendingUp className="h-3 w-3" />
-              +14% vs yesterday
-            </p>
-          </div>
+    <div className="space-y-6 pb-12">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 rounded-2xl border border-border shadow-xs">
+        <div>
+          <h1 className="text-xl font-bold text-text-primary">
+            Welcome back, {store?.name || 'Kirana Store'}! 👋
+          </h1>
+          <p className="text-xs text-text-secondary">Here is your live store performance & orders overview</p>
         </div>
 
-        {/* Active checkouts packing */}
-        <div className="p-4 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-28">
-          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
-            <ShoppingBag className="h-4 w-4 text-brand-violet" />
-            Active packing
-          </span>
-          <div className="mt-1">
-            <span className="text-xl font-extrabold text-text-primary font-heading">
-              {activeOrdersCount} Orders
-            </span>
-            <p className="text-[9px] text-text-secondary font-bold mt-0.5 uppercase tracking-wider">
-              Incoming from database
-            </p>
-          </div>
-        </div>
-
-        {/* Completed count */}
-        <div className="p-4 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-28">
-          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
-            <CheckCircle className="h-4 w-4 text-brand-emerald" />
-            Completed items
-          </span>
-          <div className="mt-1">
-            <span className="text-xl font-extrabold text-text-primary font-heading">
-              {completedOrdersCount} checkouts
-            </span>
-            <p className="text-[9px] text-text-secondary font-bold mt-0.5 uppercase tracking-wider">
-              98.2% fulfillment rate
-            </p>
-          </div>
-        </div>
-
-        {/* Stock alerts warnings */}
-        <div className="p-4 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-28">
-          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
-            <AlertTriangle className="h-4 w-4 text-status-error" />
-            Low stock alerts
-          </span>
-          <div className="mt-1">
-            <span className={cn("text-xl font-extrabold font-heading", lowStockProducts.length > 0 ? "text-status-error animate-pulse" : "text-text-primary")}>
-              {lowStockProducts.length + outOfStockProducts.length} warnings
-            </span>
-            <p className="text-[9px] text-text-secondary font-bold mt-0.5 uppercase tracking-wider">
-              {outOfStockProducts.length} items out of stock
-            </p>
-          </div>
-        </div>
-
-      </div>
-
-      {/* 2. Charts and low-stock alerts side-by-side */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 columns: Revenue Chart */}
-        <div className="lg:col-span-2 p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
-          <div className="flex justify-between items-center border-b border-border-primary/60 pb-3">
-            <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Order Volume Analytics</h3>
-            <div className="flex gap-1.5">
-              {['DAILY', 'WEEKLY', 'MONTHLY'].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setActiveChartTab(c as any)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-lg border text-[10px] font-bold cursor-pointer transition-all",
-                    activeChartTab === c 
-                      ? "border-brand-emerald bg-brand-emerald/5 text-brand-emerald" 
-                      : "border-border-primary text-text-secondary bg-bg-secondary"
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Minimalist responsive SVG Bar Chart */}
-          <div className="relative h-48 w-full flex items-end justify-between px-6 pt-4 border-b border-border-primary">
-            {chartData.map((bar, idx) => (
-              <div key={idx} className="flex flex-col items-center flex-1 space-y-2">
-                <div className="relative w-8 rounded-t bg-brand-emerald/10 hover:bg-brand-emerald/20 transition-all flex items-end justify-center" style={{ height: `${Math.max(5, bar.val * 20)}%` }}>
-                  <span className="absolute -top-6 text-[9px] font-extrabold text-brand-emerald">{bar.val}</span>
-                  <div className="w-full h-2 rounded-t bg-brand-emerald" />
-                </div>
-                <span className="text-[8px] text-text-secondary font-bold uppercase tracking-wider">{bar.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right column: Low stock alarms alerts */}
-        <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
-          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary pb-2 flex items-center gap-1.5">
-            <AlertTriangle className="h-4.5 w-4.5 text-status-error" />
-            Inventory Alerts
-          </h3>
-
-          <div className="space-y-3 overflow-y-auto max-h-48">
-            {outOfStockProducts.map((p: any) => (
-              <div key={p.id} className="p-3 bg-status-error/5 border border-status-error/10 rounded-xl flex items-center justify-between">
-                <div>
-                  <h4 className="font-extrabold text-text-primary">{p.name}</h4>
-                  <span className="text-[9px] text-status-error font-bold uppercase">OUT OF STOCK</span>
-                </div>
-                <span className="text-xs font-extrabold text-text-primary">0</span>
-              </div>
-            ))}
-
-            {lowStockProducts.map((p: any) => (
-              <div key={p.id} className="p-3 bg-status-warning/5 border border-status-warning/10 rounded-xl flex items-center justify-between">
-                <div>
-                  <h4 className="font-extrabold text-text-primary">{p.name}</h4>
-                  <span className="text-[9px] text-status-warning font-bold uppercase">LOW STOCK ALERT</span>
-                </div>
-                <span className="text-xs font-extrabold text-text-primary">{p.stock} units</span>
-              </div>
-            ))}
-
-            {lowStockProducts.length === 0 && outOfStockProducts.length === 0 && (
-              <div className="text-center py-8 text-text-secondary">
-                🌱 Catalog inventories look robust! No low stock alerts active.
-              </div>
+        {/* Quick Availability Status Controls */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => updateStatusMutation.mutate({ isOpen: !store?.isOpen })}
+            className={cn(
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center space-x-1.5',
+              store?.isOpen
+                ? 'bg-success/10 border-success/30 text-success'
+                : 'bg-surface-subtle border-border text-text-secondary'
             )}
-          </div>
-        </div>
+          >
+            <StoreIcon className="w-4 h-4" />
+            <span>{store?.isOpen ? 'Store Open' : 'Store Closed'}</span>
+          </button>
 
+          <button
+            onClick={() => updateStatusMutation.mutate({ isPaused: !store?.isPaused })}
+            className={cn(
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center space-x-1.5',
+              store?.isPaused
+                ? 'bg-warning/10 border-warning/30 text-warning'
+                : 'bg-surface-subtle border-border text-text-secondary'
+            )}
+          >
+            <PauseCircle className="w-4 h-4" />
+            <span>{store?.isPaused ? 'Paused' : 'Active'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* 3. Settings Form & Settlement Ledger breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Left: Store settings details */}
-        <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
-          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary pb-2 flex items-center gap-1.5">
-            <Sliders className="h-4.5 w-4.5" />
-            Store Settings Preferences
-          </h3>
-
-          <form onSubmit={handleSaveSettings} className="space-y-4">
-            
-            <div className="space-y-1">
-              <label htmlFor="storeName" className="text-[10px] font-bold text-text-secondary uppercase">Storefront Name</label>
-              <input 
-                id="storeName"
-                value={storeName} 
-                onChange={(e) => setStoreName(e.target.value)}
-                className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label htmlFor="radius" className="text-[10px] font-bold text-text-secondary uppercase">Delivery Radius (km)</label>
-                <input 
-                  id="radius"
-                  type="number"
-                  value={radius} 
-                  onChange={(e) => setRadius(parseFloat(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="minOrder" className="text-[10px] font-bold text-text-secondary uppercase">Min Order Value (₹)</label>
-                <input 
-                  id="minOrder"
-                  type="number"
-                  value={minOrder} 
-                  onChange={(e) => setMinOrder(parseFloat(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label htmlFor="bankName" className="text-[10px] font-bold text-text-secondary uppercase">Bank Name</label>
-                <input 
-                  id="bankName"
-                  value={bankName} 
-                  onChange={(e) => setBankName(e.target.value)}
-                  placeholder="e.g. HDFC Bank"
-                  className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="bankAccount" className="text-[10px] font-bold text-text-secondary uppercase">Bank Account Number</label>
-                <input 
-                  id="bankAccount"
-                  value={bankAccount} 
-                  onChange={(e) => setBankAccount(e.target.value)}
-                  placeholder="e.g. 501002938192"
-                  className="w-full px-3 py-2.5 border border-border-primary rounded-xl bg-bg-tertiary focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <div>
-                <label htmlFor="holidayMode" className="font-bold text-text-primary block cursor-pointer">Holiday Mode</label>
-                <span className="text-[9px] text-text-secondary font-semibold">Toggling temporarily pauses store orders</span>
-              </div>
-              <input 
-                id="holidayMode"
-                type="checkbox" 
-                checked={holidayMode}
-                onChange={(e) => setHolidayMode(e.target.checked)}
-                className="h-4.5 w-4.5 accent-brand-emerald cursor-pointer"
-              />
-            </div>
-
-            <button 
-              type="submit"
-              disabled={updateSettingsMutation.isPending}
-              className="py-2.5 px-6 bg-brand-emerald hover:bg-brand-emerald-hover text-white font-bold rounded-xl cursor-pointer disabled:opacity-50"
-            >
-              {updateSettingsMutation.isPending ? 'Saving...' : 'Save Configuration'}
-            </button>
-          </form>
-        </div>
-
-        {/* Right: Settlements payouts console */}
-        <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
-          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider border-b border-border-primary pb-2 flex items-center gap-1.5">
-            <BankIcon className="h-4.5 w-4.5 text-brand-emerald" />
-            Payout Settled History
-          </h3>
-
-          <div className="p-4 rounded-xl bg-bg-tertiary/60 border border-border-primary flex items-center justify-between text-xs">
+      {/* Merchant Setup Checklist Card */}
+      {completionPercentage < 100 && (
+        <div className="p-5 bg-gradient-to-r from-brand-primary/10 to-accent-teal/10 border border-brand-primary/20 rounded-2xl space-y-4">
+          <div className="flex items-center justify-between">
             <div>
-              <span className="text-[9px] text-text-secondary uppercase tracking-wider block font-bold">Payout account</span>
-              <span className="font-bold text-text-primary mt-0.5 block">
-                {bankName ? `${bankName} •••• ${bankAccount.slice(-4)}` : 'No Payout Account Connected'}
-              </span>
+              <h3 className="text-sm font-bold text-text-primary">Store Setup Checklist</h3>
+              <p className="text-xs text-text-secondary">
+                Complete all steps to activate instant hyperlocal delivery orders
+              </p>
             </div>
-            <div className="text-right">
-              <span className="text-[9px] text-brand-emerald font-bold uppercase block">Pending Settlement</span>
-              <span className="font-extrabold text-text-primary font-heading mt-0.5 block">₹0.00</span>
-            </div>
+            <span className="text-xs font-extrabold text-brand-primary bg-surface px-3 py-1 rounded-xl border border-brand-primary/30 shadow-xs">
+              {completionPercentage}% Complete
+            </span>
           </div>
 
-          <div className="space-y-2">
-            <span className="text-[9px] font-bold text-text-secondary uppercase tracking-wider block">Past settlements logs</span>
-            
-            <div className="divide-y divide-border-primary/60 border border-border-primary rounded-xl bg-bg-tertiary/40 overflow-hidden max-h-40 overflow-y-auto">
-              {payoutsList.map((pay) => (
-                <div key={pay.id} className="p-3.5 flex justify-between items-center text-xs">
-                  <div>
-                    <span className="font-bold text-text-primary">{pay.id}</span>
-                    <span className="text-[9px] text-text-secondary block font-semibold mt-0.5">{pay.date}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-extrabold text-text-primary font-heading">{formatCurrency(pay.amount)}</span>
-                    <span className="text-[8px] font-extrabold text-brand-emerald uppercase block mt-0.5">{pay.status}</span>
-                  </div>
-                </div>
-              ))}
-              {payoutsList.length === 0 && (
-                <div className="text-center py-6 text-text-secondary">
-                  No past payout settlements recorded.
-                </div>
-              )}
-            </div>
+          {/* Progress Bar */}
+          <div className="w-full bg-surface/80 rounded-full h-2 overflow-hidden border border-border">
+            <div
+              className="bg-brand-primary h-full transition-all duration-500 rounded-full"
+              style={{ width: `${completionPercentage}%` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            {setupTasks.map((task) => (
+              <div key={task.id} className="flex items-center space-x-2 text-xs">
+                {task.isDone ? (
+                  <CheckSquare className="w-4 h-4 text-success shrink-0" />
+                ) : (
+                  <Square className="w-4 h-4 text-text-secondary shrink-0" />
+                )}
+                <span className={cn(task.isDone ? 'line-through text-text-secondary' : 'font-semibold text-text-primary')}>
+                  {task.label}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
+      )}
 
+      {/* KPI Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="p-4 bg-surface border border-border rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-text-secondary uppercase">Today's Revenue</span>
+            <DollarSign className="w-4 h-4 text-success" />
+          </div>
+          <p className="text-xl font-extrabold text-text-primary">{formatCurrency(stats?.totalRevenue ?? 0)}</p>
+        </div>
+
+        <div className="p-4 bg-surface border border-border rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-text-secondary uppercase">Completed Orders</span>
+            <CheckCircle2 className="w-4 h-4 text-brand-primary" />
+          </div>
+          <p className="text-xl font-extrabold text-text-primary">{stats?.completedOrdersCount ?? 0}</p>
+        </div>
+
+        <div className="p-4 bg-surface border border-border rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-text-secondary uppercase">Active Products</span>
+            <Package className="w-4 h-4 text-accent-teal" />
+          </div>
+          <p className="text-xl font-extrabold text-text-primary">{productsList.length}</p>
+        </div>
+
+        <div className="p-4 bg-surface border border-border rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-text-secondary uppercase">Stock Alerts</span>
+            <AlertTriangle className="w-4 h-4 text-warning" />
+          </div>
+          <p className="text-xl font-extrabold text-warning">{lowStockCount + outOfStockCount}</p>
+        </div>
       </div>
 
+      {/* Revenue Performance Graph */}
+      <div className="p-5 bg-surface border border-border rounded-2xl space-y-4 shadow-xs">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-text-primary">Weekly Revenue Trends</h3>
+            <p className="text-xs text-text-secondary">Sales performance across days</p>
+          </div>
+          <span className="text-xs font-bold text-success flex items-center space-x-1">
+            <TrendingUp className="w-4 h-4" />
+            <span>+14.2% Growth</span>
+          </span>
+        </div>
+
+        {/* Visual Bar Chart */}
+        <div className="h-44 flex items-end justify-between gap-2 pt-4 px-2 border-b border-border">
+          {chartData.map((d, i) => {
+            const heightPercent = Math.round((d.val / maxVal) * 100);
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
+                <div className="w-full bg-surface-subtle rounded-t-xl overflow-hidden h-32 flex items-end">
+                  <div
+                    className="w-full bg-brand-primary/80 group-hover:bg-brand-primary transition-all rounded-t-xl"
+                    style={{ height: `${Math.max(12, heightPercent)}%` }}
+                    title={`₹${d.val}`}
+                  />
+                </div>
+                <span className="text-[10px] font-bold text-text-secondary">{d.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 };
-
-export default MerchantDashboard;

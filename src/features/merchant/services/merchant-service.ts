@@ -90,11 +90,15 @@ export class MerchantService extends BaseRepository {
     name: string;
     description?: string;
     brand?: string;
+    sku?: string;
+    mrp?: number;
+    taxRate?: number;
     isVeg?: boolean;
+    isVegetarian?: boolean;
     isOrganic?: boolean;
     categoryId: string;
     weightGrams?: number;
-    images?: Array<{ url: string; isPrimary?: boolean }>;
+    images?: Array<{ url: string; angle?: string; isPrimary?: boolean }>;
     variants: Array<{ name: string; price: number; sku: string; stock: number }>;
   }): Promise<Product> {
     return this.executeRequest(async () => {
@@ -115,11 +119,15 @@ export class MerchantService extends BaseRepository {
       name?: string;
       description?: string;
       brand?: string;
+      sku?: string;
+      mrp?: number;
+      taxRate?: number;
       isVeg?: boolean;
+      isVegetarian?: boolean;
       isOrganic?: boolean;
       categoryId?: string;
       weightGrams?: number;
-      images?: Array<{ url: string; isPrimary?: boolean }>;
+      images?: Array<{ url: string; angle?: string; isPrimary?: boolean }>;
       variants?: Array<{ id?: string; name?: string; price?: number; sku?: string; stock?: number }>;
     }
   ): Promise<Product> {

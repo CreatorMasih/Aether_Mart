@@ -7,6 +7,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://lo
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -33,19 +34,25 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     
+    // Do not attempt token refresh for auth endpoints to prevent loops
+    const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || 
+                           originalRequest?.url?.includes('/auth/verify-otp') ||
+                           originalRequest?.url?.includes('/auth/google-login') ||
+                           originalRequest?.url?.includes('/auth/refresh');
+
     // Check if error is 401 (Unauthorized) and we haven't retried yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
       
       try {
         // Enforce session refresh endpoint request
-        const response = await axios.post<{ accessToken: string }>(
+        const response = await axios.post(
           `${API_BASE_URL}/auth/refresh`,
           {},
           { withCredentials: true } // Cookie contains the refresh token
         );
         
-        const newAccessToken = response.data.accessToken;
+        const newAccessToken = (response.data as any)?.data?.accessToken || (response.data as any)?.accessToken;
         const user = useAuthStore.getState().user;
         
         if (newAccessToken && user) {

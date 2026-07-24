@@ -38,9 +38,9 @@ const OrderConfirmationPage = lazy(() => import('../features/customer-checkout/c
 const LiveOrderTrackingPage = lazy(() => import('../features/customer-checkout/components/LiveOrderTrackingPage'));
 const CustomerDashboardPage = lazy(() => import('../features/customer-catalog/components/CustomerDashboardPage'));
 
-const MerchantDashboard = lazy(() => import('../features/merchant/components/MerchantDashboard'));
-const MerchantOrders = lazy(() => import('../features/merchant/components/MerchantOrders'));
-const MerchantCatalog = lazy(() => import('../features/merchant/components/MerchantCatalog'));
+const MerchantDashboard = lazy(() => import('../features/merchant/components/MerchantDashboard').then((m) => ({ default: m.MerchantDashboard })));
+const MerchantOrders = lazy(() => import('../features/merchant/components/MerchantOrders').then((m) => ({ default: m.MerchantOrders })));
+const MerchantCatalog = lazy(() => import('../features/merchant/components/MerchantCatalog').then((m) => ({ default: m.MerchantCatalog })));
 
 const RiderDashboard = lazy(() => import('../features/rider/components/RiderDashboard'));
 const RiderJobActive = lazy(() => import('../features/rider/components/RiderJobActive'));
