@@ -78,29 +78,33 @@ export function createApp(): Application {
 
   app.use(globalRateLimiter);
 
-  // ── Swagger UI (available in non-production or can be gated) ──────────────
+  // ── Swagger UI Interactive API Documentation ─────────────────────────────
 
-  if (process.env.NODE_ENV !== 'production') {
-    app.use(
-      '/api/docs',
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerSpec, {
-        customSiteTitle: 'Aether Mart API Docs',
-        customCss: '.swagger-ui .topbar { display: none }',
-        swaggerOptions: {
-          persistAuthorization: true,
-        },
-      })
-    );
+  const swaggerCustomOptions = {
+    customSiteTitle: 'Aether Mart API Documentation',
+    customCss: '.swagger-ui .topbar { display: none } .swagger-ui .info { margin: 20px 0 }',
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      filter: true,
+    },
+  };
 
-    // Expose raw OpenAPI JSON
-    app.get('/api/docs.json', (_req: Request, res: Response) => {
-      res.setHeader('Content-Type', 'application/json');
-      res.send(swaggerSpec);
-    });
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerCustomOptions));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerCustomOptions));
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerCustomOptions));
 
-    logger.info('📖 Swagger UI available at /api/docs');
-  }
+  // Expose raw OpenAPI JSON
+  app.get('/api/docs.json', (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+  });
+  app.get('/api-docs.json', (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+  });
+
+  logger.info('📖 Swagger UI available at /api/docs');
 
   // ── API Routes ─────────────────────────────────────────────────────────────
 
