@@ -8,7 +8,7 @@ export class PostalController {
    */
   public getPincodeDetails = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { pincode } = req.params;
+      const pincode = String(req.params.pincode || '').trim();
       
       // Validation: Indian PINCODE is 6 digits
       if (!/^\d{6}$/.test(pincode)) {
@@ -33,9 +33,9 @@ export class PostalController {
    */
   public getCityDetails = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { city } = req.params;
+      const city = String(req.params.city || '').trim();
 
-      if (!city || city.trim().length < 2) {
+      if (!city || city.length < 2) {
         sendError(res, 'Invalid city name. Please enter at least 2 characters.', HttpStatus.BAD_REQUEST, ErrorCodes.INVALID_PAYLOAD);
         return;
       }
