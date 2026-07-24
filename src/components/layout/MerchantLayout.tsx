@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Layers, LogOut, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Layers, Package, Store, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '../../features/auth/store/auth-store';
 import { useToast } from '../../hooks/useToast';
 import { useTheme } from '../../core/theme/useTheme';
@@ -28,6 +28,8 @@ export const MerchantLayout: React.FC = () => {
     { to: 'dashboard', label: 'Dashboard Overview', icon: LayoutDashboard },
     { to: 'orders', label: 'Orders Checklist', icon: ShoppingBag },
     { to: 'catalog', label: 'Product Catalog', icon: Layers },
+    { to: 'inventory', label: 'Inventory Stock', icon: Package },
+    { to: 'profile', label: 'Store Profile', icon: Store },
   ];
 
   return (

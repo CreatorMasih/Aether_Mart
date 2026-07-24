@@ -29,6 +29,7 @@ export class MerchantService {
       fssaiNumber?: string;
       storeName?: string;
       name?: string;
+      description?: string;
       storeAddress?: string;
       address?: string;
       latitude?: number;
@@ -78,6 +79,7 @@ export class MerchantService {
         if (params.storeName !== undefined || params.name !== undefined) {
           storeData.name = params.storeName ?? params.name;
         }
+        if (params.description !== undefined) storeData.description = params.description;
         if (params.storeAddress !== undefined || params.address !== undefined) {
           storeData.address = params.storeAddress ?? params.address;
         }

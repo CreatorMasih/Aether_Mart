@@ -346,6 +346,7 @@ model Store {
   id                String   @id @default(uuid())
   merchantId        String   @unique
   name              String
+  description       String?
   logoUrl           String?
   bannerUrl         String?
   rating            Float    @default(0.0)

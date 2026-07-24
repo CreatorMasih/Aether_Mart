@@ -8,6 +8,7 @@ export const updateMerchantProfileSchema = z.object({
   fssaiNumber: z.string().optional(),
   storeName: z.string().optional(),
   name: z.string().optional(),
+  description: z.string().optional(),
   storeAddress: z.string().optional(),
   address: z.string().optional(),
   latitude: z.number().min(-90).max(90).optional(),

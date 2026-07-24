@@ -41,6 +41,8 @@ const CustomerDashboardPage = lazy(() => import('../features/customer-catalog/co
 const MerchantDashboard = lazy(() => import('../features/merchant/components/MerchantDashboard').then((m) => ({ default: m.MerchantDashboard })));
 const MerchantOrders = lazy(() => import('../features/merchant/components/MerchantOrders').then((m) => ({ default: m.MerchantOrders })));
 const MerchantCatalog = lazy(() => import('../features/merchant/components/MerchantCatalog').then((m) => ({ default: m.MerchantCatalog })));
+const MerchantInventory = lazy(() => import('../features/merchant/components/MerchantInventory').then((m) => ({ default: m.MerchantInventory })));
+const StoreProfileEditor = lazy(() => import('../features/merchant/components/StoreProfileEditor').then((m) => ({ default: m.StoreProfileEditor })));
 
 const RiderDashboard = lazy(() => import('../features/rider/components/RiderDashboard'));
 const RiderJobActive = lazy(() => import('../features/rider/components/RiderJobActive'));
@@ -171,6 +173,18 @@ export const routes: RouteObject[] = [
           {
             path: 'catalog',
             element: withSuspense(MerchantCatalog),
+          },
+          {
+            path: 'inventory',
+            element: withSuspense(MerchantInventory),
+          },
+          {
+            path: 'profile',
+            element: withSuspense(StoreProfileEditor),
+          },
+          {
+            path: 'store',
+            element: withSuspense(StoreProfileEditor),
           },
         ],
       },
