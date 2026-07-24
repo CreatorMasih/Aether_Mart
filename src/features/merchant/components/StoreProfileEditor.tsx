@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Store as StoreIcon,
@@ -33,6 +33,13 @@ export const StoreProfileEditor: React.FC = () => {
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'GENERAL' | 'LOCATION' | 'HOURS' | 'DELIVERY' | 'PAYMENTS'>('GENERAL');
+  const [isMapReady, setIsMapReady] = useState(false);
+
+  // Leaflet Map Refs
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
 
   // Queries
   const { data: profileMe, isLoading } = useQuery({
@@ -84,6 +91,24 @@ export const StoreProfileEditor: React.FC = () => {
   const [panNumber, setPanNumber] = useState('');
   const [fssaiNumber, setFssaiNumber] = useState('');
 
+  // Load Leaflet CDN script & CSS dynamically
+  useEffect(() => {
+    if ((window as any).L) {
+      setIsMapReady(true);
+      return;
+    }
+
+    const cssLink = document.createElement('link');
+    cssLink.rel = 'stylesheet';
+    cssLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(cssLink);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => setIsMapReady(true);
+    document.head.appendChild(script);
+  }, []);
+
   useEffect(() => {
     if (store) {
       setStoreName(store.name || '');
@@ -129,6 +154,141 @@ export const StoreProfileEditor: React.FC = () => {
   const completedCount = tasks.filter((t) => t.done).length;
   const completionPercentage = Math.round((completedCount / tasks.length) * 100);
 
+  // Auto-Fill Reverse Geocoding helper
+  const autoReverseGeocode = async (lat: number, lng: number) => {
+    setIsGeocoding(true);
+    try {
+      const res = await apiClient.post('/location/reverse-geocode', { latitude: lat, longitude: lng });
+      if (res.data?.data?.formattedAddress) {
+        setAddress(res.data.data.formattedAddress);
+        return;
+      }
+      const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await nomRes.json();
+      if (data && data.display_name) {
+        setAddress(data.display_name);
+        return;
+      }
+      setAddress(`Store Pin Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    } catch {
+      setAddress(`Store Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
+  // Initialize Interactive Leaflet Map when LOCATION or DELIVERY tab is active
+  useEffect(() => {
+    if (activeTab !== 'LOCATION' && activeTab !== 'DELIVERY') return;
+    if (!isMapReady) return;
+    if (!mapContainerRef.current) return;
+
+    const L = (window as any).L;
+    if (!L) return;
+
+    if (!mapInstanceRef.current) {
+      const map = L.map(mapContainerRef.current, {
+        center: [latitude, longitude],
+        zoom: 14,
+        zoomControl: true,
+      });
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Custom Pure SVG Draggable Store Pin Icon
+      const pinIcon = L.divIcon({
+        className: 'custom-store-pin-wrapper',
+        html: `
+          <div style="background-color: #10b981; width: 38px; height: 38px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.35); cursor: grab;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+          </div>
+        `,
+        iconSize: [38, 38],
+        iconAnchor: [19, 38],
+      });
+
+      // Draggable Store Marker Pin
+      const marker = L.marker([latitude, longitude], {
+        icon: pinIcon,
+        draggable: true,
+      }).addTo(map);
+
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        const newLat = Number(pos.lat.toFixed(6));
+        const newLng = Number(pos.lng.toFixed(6));
+        setLatitude(newLat);
+        setLongitude(newLng);
+        autoReverseGeocode(newLat, newLng);
+      });
+
+      // Map Click Location Picker
+      map.on('click', (e: any) => {
+        const newLat = Number(e.latlng.lat.toFixed(6));
+        const newLng = Number(e.latlng.lng.toFixed(6));
+        setLatitude(newLat);
+        setLongitude(newLng);
+        marker.setLatLng([newLat, newLng]);
+        autoReverseGeocode(newLat, newLng);
+      });
+
+      // Delivery Coverage Radius Circle
+      const circle = L.circle([latitude, longitude], {
+        radius: deliveryRadiusKm * 1000,
+        color: '#10b981',
+        fillColor: '#10b981',
+        fillOpacity: 0.15,
+        weight: 2,
+      }).addTo(map);
+
+      mapInstanceRef.current = map;
+      markerRef.current = marker;
+      circleRef.current = circle;
+    } else {
+      mapInstanceRef.current.setView([latitude, longitude], mapInstanceRef.current.getZoom());
+      if (markerRef.current) {
+        markerRef.current.setLatLng([latitude, longitude]);
+      }
+      if (circleRef.current) {
+        circleRef.current.setLatLng([latitude, longitude]);
+        circleRef.current.setRadius(deliveryRadiusKm * 1000);
+      }
+    }
+
+    setTimeout(() => {
+      mapInstanceRef.current?.invalidateSize();
+    }, 150);
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+        circleRef.current = null;
+      }
+    };
+  }, [activeTab, isMapReady]);
+
+  // Update Leaflet marker & circle when lat/lng/radius states change
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setView([latitude, longitude], mapInstanceRef.current.getZoom());
+      if (markerRef.current) {
+        markerRef.current.setLatLng([latitude, longitude]);
+      }
+      if (circleRef.current) {
+        circleRef.current.setLatLng([latitude, longitude]);
+        circleRef.current.setRadius(deliveryRadiusKm * 1000);
+      }
+    }
+  }, [latitude, longitude, deliveryRadiusKm]);
+
   // Use Browser GPS Location
   const handleDetectGPS = () => {
     if (!navigator.geolocation) {
@@ -139,36 +299,19 @@ export const StoreProfileEditor: React.FC = () => {
     setIsGPSDetecting(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLatitude(Number(pos.coords.latitude.toFixed(6)));
-        setLongitude(Number(pos.coords.longitude.toFixed(6)));
+        const newLat = Number(pos.coords.latitude.toFixed(6));
+        const newLng = Number(pos.coords.longitude.toFixed(6));
+        setLatitude(newLat);
+        setLongitude(newLng);
         setIsGPSDetecting(false);
-        showToast({ type: 'success', title: 'GPS Detected', description: 'Store coordinates updated from current location.' });
+        autoReverseGeocode(newLat, newLng);
+        showToast({ type: 'success', title: 'GPS Location Detected', description: 'Store coordinates set from device GPS.' });
       },
       () => {
         setIsGPSDetecting(false);
-        showToast({ type: 'error', title: 'Location Access Denied', description: 'Please enter store coordinates or street address manually.' });
+        showToast({ type: 'error', title: 'Location Access Denied', description: 'Please drop pin on map or enter coordinates.' });
       }
     );
-  };
-
-  // Reverse Geocode Pin Coordinates to Street Address
-  const handleReverseGeocode = async () => {
-    setIsGeocoding(true);
-    try {
-      const res = await apiClient.post('/location/reverse-geocode', { latitude, longitude });
-      if (res.data?.data?.formattedAddress) {
-        setAddress(res.data.data.formattedAddress);
-        showToast({ type: 'success', title: 'Address Auto-Filled', description: 'Populated address from pin location.' });
-      } else {
-        setAddress(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}, MG Road Market Area`);
-        showToast({ type: 'info', title: 'Location Updated', description: 'Set area address from coordinates.' });
-      }
-    } catch {
-      setAddress(`Plot 42, Koramangala Industrial Area (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
-      showToast({ type: 'info', title: 'Location Updated', description: 'Set physical store address.' });
-    } finally {
-      setIsGeocoding(false);
-    }
   };
 
   const updateStoreMutation = useMutation({
@@ -181,8 +324,8 @@ export const StoreProfileEditor: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
       showToast({
         type: 'success',
-        title: 'Store Settings Saved! 🏬',
-        description: 'Store profile, location, timings, and delivery radius persisted successfully.',
+        title: 'Store Profile Saved! 🏬',
+        description: 'Store details, interactive location, radius coverage, and operating hours updated.',
       });
     },
     onError: (err: any) => {
@@ -219,8 +362,8 @@ export const StoreProfileEditor: React.FC = () => {
       latitude: Number(latitude),
       longitude: Number(longitude),
       deliveryRadiusKm: Number(deliveryRadiusKm),
-      minimumOrderValue: Number(minimumOrderValue),
-      deliveryFee: Number(deliveryFee),
+      minimumOrderValue: Number(minimumOrderValue || 0),
+      deliveryFee: Number(deliveryFee || 0),
       openingTime: is24x7 ? '00:00' : openingTime,
       closingTime: is24x7 ? '23:59' : closingTime,
       isOpen,
@@ -251,7 +394,7 @@ export const StoreProfileEditor: React.FC = () => {
         <div>
           <h1 className="text-xl font-bold text-text-primary flex items-center space-x-2">
             <StoreIcon className="w-5 h-5 text-brand-primary" />
-            <span>Store Console & Profile Editor</span>
+            <span>Store Console & Profile Management</span>
           </h1>
           <p className="text-xs text-text-secondary">
             Manage your store information, map coordinates, delivery coverage radius, and payout accounts
@@ -276,7 +419,7 @@ export const StoreProfileEditor: React.FC = () => {
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-text-primary flex items-center space-x-1.5">
             <Sparkles className="w-4 h-4 text-brand-primary" />
-            <span>Store Setup Checklist</span>
+            <span>Store Onboarding Setup Checklist</span>
           </span>
           <span className="text-xs font-extrabold text-brand-primary bg-surface px-3 py-1 rounded-xl border border-brand-primary/30 shadow-xs">
             {completionPercentage}% Configured
@@ -294,10 +437,10 @@ export const StoreProfileEditor: React.FC = () => {
       {/* Navigation Tabs */}
       <div className="flex overflow-x-auto border-b border-border bg-surface rounded-2xl p-1.5 gap-1 shadow-xs">
         {[
-          { id: 'GENERAL', label: '1. General Details', icon: StoreIcon },
+          { id: 'GENERAL', label: '1. General Info', icon: StoreIcon },
           { id: 'LOCATION', label: '2. Location & Map', icon: MapPin },
-          { id: 'HOURS', label: '3. Hours & Status', icon: Clock },
-          { id: 'DELIVERY', label: '4. Radius & Pricing', icon: Truck },
+          { id: 'HOURS', label: '3. Business Hours', icon: Clock },
+          { id: 'DELIVERY', label: '4. Delivery Radius', icon: Truck },
           { id: 'PAYMENTS', label: '5. Payouts & Tax', icon: CreditCard },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -437,16 +580,16 @@ export const StoreProfileEditor: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 2: INTERACTIVE LOCATION & MAP */}
+        {/* TAB 2: INTERACTIVE LOCATION & LEAFLET MAP */}
         {activeTab === 'LOCATION' && (
           <div className="p-5 bg-surface border border-border rounded-2xl space-y-4 shadow-xs">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">
-                  Store Pin Drop & Address Coordinates
+                  Interactive Store Location Map & Pin Picker
                 </h3>
                 <p className="text-xs text-text-secondary">
-                  Set exact store latitude and longitude for customer distance matching
+                  Drag the marker pin or click anywhere on the map to set your store exact GPS location
                 </p>
               </div>
 
@@ -454,35 +597,24 @@ export const StoreProfileEditor: React.FC = () => {
                 type="button"
                 onClick={handleDetectGPS}
                 disabled={isGPSDetecting}
-                className="px-3.5 py-2 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-xs font-bold rounded-xl border border-brand-primary/30 transition-all flex items-center space-x-1.5"
+                className="px-3.5 py-2 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-xs font-bold rounded-xl border border-brand-primary/30 transition-all flex items-center space-x-1.5 self-start sm:self-auto"
               >
                 <Navigation className="w-4 h-4" />
                 <span>{isGPSDetecting ? 'Detecting GPS...' : 'Use Current GPS'}</span>
               </button>
             </div>
 
-            {/* Interactive Map Visualizer Canvas */}
-            <div className="relative h-56 rounded-2xl bg-surface-subtle border border-border overflow-hidden flex flex-col items-center justify-center p-4">
-              <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:20px_20px]" />
+            {/* REAL INTERACTIVE LEAFLET MAP CANVAS */}
+            <div className="relative rounded-2xl border border-border overflow-hidden shadow-xs">
+              <div ref={mapContainerRef} className="w-full h-80 z-0 bg-surface-subtle" />
 
-              {/* Dynamic Delivery Coverage Circle Simulation */}
-              <div
-                className="absolute rounded-full border-2 border-brand-primary/60 bg-brand-primary/10 transition-all duration-300 flex items-center justify-center"
-                style={{
-                  width: `${Math.min(220, deliveryRadiusKm * 15)}px`,
-                  height: `${Math.min(220, deliveryRadiusKm * 15)}px`,
-                }}
-              />
-
-              <div className="relative z-10 flex flex-col items-center space-y-2">
-                <div className="w-12 h-12 rounded-full bg-brand-primary text-white flex items-center justify-center shadow-lg animate-bounce">
-                  <MapPin className="w-6 h-6" />
-                </div>
-                <span className="px-3 py-1 bg-surface border border-border rounded-full text-xs font-extrabold text-text-primary shadow-xs">
+              <div className="absolute bottom-3 left-3 z-10 bg-surface/95 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-border text-[11px] font-bold text-text-primary shadow-md flex items-center space-x-2">
+                <MapPin className="w-3.5 h-3.5 text-brand-primary" />
+                <span>
                   {latitude.toFixed(4)}, {longitude.toFixed(4)}
                 </span>
-                <span className="text-[11px] font-bold text-brand-primary bg-surface px-2.5 py-0.5 rounded-md border border-brand-primary/30">
-                  Coverage: {deliveryRadiusKm} km Radius Zone
+                <span className="text-brand-primary border-l border-border pl-2">
+                  {deliveryRadiusKm} km Radius Zone
                 </span>
               </div>
             </div>
@@ -520,7 +652,7 @@ export const StoreProfileEditor: React.FC = () => {
                 </label>
                 <button
                   type="button"
-                  onClick={handleReverseGeocode}
+                  onClick={() => autoReverseGeocode(latitude, longitude)}
                   disabled={isGeocoding}
                   className="text-[11px] font-bold text-brand-primary hover:underline flex items-center space-x-1"
                 >
@@ -637,7 +769,7 @@ export const StoreProfileEditor: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 4: DELIVERY RADIUS & PRICING */}
+        {/* TAB 4: DELIVERY RADIUS & LEAFLET MAP VISUALIZER */}
         {activeTab === 'DELIVERY' && (
           <div className="p-5 bg-surface border border-border rounded-2xl space-y-5 shadow-xs">
             <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">
@@ -671,6 +803,14 @@ export const StoreProfileEditor: React.FC = () => {
                 <span>5 km (Standard Neighborhood)</span>
                 <span>10 km (Suburban)</span>
                 <span>20 km (Citywide)</span>
+              </div>
+            </div>
+
+            {/* LEAFLET MAP VISUALIZER FOR RADIUS */}
+            <div className="relative rounded-2xl border border-border overflow-hidden shadow-xs">
+              <div ref={mapContainerRef} className="w-full h-64 z-0 bg-surface-subtle" />
+              <div className="absolute top-3 right-3 z-10 bg-surface/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-border text-[11px] font-bold text-brand-primary shadow-md">
+                Active Radius: {deliveryRadiusKm} km Circle Overlay
               </div>
             </div>
 
