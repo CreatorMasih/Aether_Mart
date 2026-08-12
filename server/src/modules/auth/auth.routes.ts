@@ -99,6 +99,7 @@ router.post('/google-login', authRateLimiter, validate(googleLoginSchema), authC
  *         description: Invalid refresh session
  */
 router.post('/refresh', authController.refresh);
+router.post('/refresh-token', authController.refresh);
 
 /**
  * @swagger

@@ -10,6 +10,8 @@ import { CategoryCircleGrid } from './CategoryCircleGrid';
 import { ProductCardGrid } from './ProductCardGrid';
 import { StoreCardGrid } from './StoreCardGrid';
 import { pageTransition } from '../../../core/theme/animations';
+import { NotServiceableState } from '../../../components/ui/NotServiceableState';
+import { LocationPickerModal } from '../../../components/ui/LocationPickerModal';
 
 
 export const HomeScreen: React.FC = () => {
@@ -32,13 +34,17 @@ export const HomeScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+
   const lat = selectedAddress?.coordinates?.latitude;
   const lng = selectedAddress?.coordinates?.longitude;
+  const isServiceable = selectedAddress ? selectedAddress.isServiceable !== false : true;
 
   // 1. Fetch Dynamic Home Feed
   const { data: homeFeed, isLoading: isFeedLoading, isError: isFeedError, refetch: refetchFeed } = useQuery({
     queryKey: queryKeys.homeFeed(lat, lng),
     queryFn: () => catalogService.getHomeFeed(lat, lng),
+    enabled: isServiceable,
   });
 
   // 2. Parallel Category Shelf Queries
@@ -99,6 +105,18 @@ export const HomeScreen: React.FC = () => {
       </div>
     </div>
   );
+
+  if (!isServiceable) {
+    return (
+      <>
+        <NotServiceableState
+          currentLocationName={selectedAddress?.city || selectedAddress?.postalCode || 'your area'}
+          onChangeLocationClick={() => setIsLocationModalOpen(true)}
+        />
+        <LocationPickerModal isOpen={isLocationModalOpen} onClose={() => setIsLocationModalOpen(false)} />
+      </>
+    );
+  }
 
   if (isFeedLoading) {
     return (

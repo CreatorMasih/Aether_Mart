@@ -29,7 +29,6 @@ export class MerchantService {
       fssaiNumber?: string;
       storeName?: string;
       name?: string;
-      description?: string;
       storeAddress?: string;
       address?: string;
       latitude?: number;
@@ -50,10 +49,62 @@ export class MerchantService {
       contactPhone?: string;
       contactEmail?: string;
       businessType?: string;
+      description?: string;
     }
   ): Promise<any> {
-    const merchant = await merchantRepository.findMerchantByUserId(userId);
-    if (!merchant) throw new NotFoundError('Merchant Profile');
+    let merchant = await merchantRepository.findMerchantByUserId(userId);
+
+    // If merchant profile doesn't exist yet, create it dynamically
+    if (!merchant) {
+      const user = await merchantRepository.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (!user) {
+        throw new NotFoundError('User account');
+      }
+
+      const createdMerchant = await merchantRepository.prisma.merchant.create({
+        data: {
+          userId,
+          fullName: params.fullName || params.ownerName || user.email || user.phone || 'Store Manager',
+          gstNumber: params.gstNumber || undefined,
+          panNumber: params.panNumber || undefined,
+          fssaiNumber: params.fssaiNumber || undefined,
+          bankAccount: params.bankAccount || undefined,
+          bankName: params.bankName || undefined,
+        },
+      });
+
+      const createdStore = await merchantRepository.prisma.store.create({
+        data: {
+          merchantId: createdMerchant.id,
+          name: params.storeName || params.name || 'Aether Mart Store',
+          description: params.description || undefined,
+          address: params.storeAddress || params.address || 'Store Location Address',
+          latitude: params.latitude ?? 12.9716,
+          longitude: params.longitude ?? 77.5946,
+          deliveryRadiusKm: params.deliveryRadiusKm ?? 5.0,
+          openingTime: params.openingTime || '08:00',
+          closingTime: params.closingTime || '22:00',
+          isOpen: params.isOpen ?? true,
+          isPaused: params.isPaused ?? false,
+          isHoliday: params.isHoliday ?? false,
+          minimumOrderValue: params.minimumOrderValue ?? 0,
+          deliveryFee: params.deliveryFee ?? 0,
+          logoUrl: params.logoUrl || undefined,
+          bannerUrl: params.bannerUrl || undefined,
+          upiId: params.upiId || undefined,
+          contactPhone: params.contactPhone || user.phone || undefined,
+          contactEmail: params.contactEmail || user.email || undefined,
+          businessType: params.businessType || undefined,
+        },
+      });
+
+      return {
+        merchant: createdMerchant,
+        store: createdStore,
+      };
+    }
 
     const result = await merchantRepository.prisma.$transaction(async (tx) => {
       // 1. Update Merchant info
@@ -72,7 +123,7 @@ export class MerchantService {
         data: merchantData,
       });
 
-      // 2. Update Store info
+      // 2. Update or Create Store info
       let updatedStore = null;
       if (merchant.store) {
         const storeData: any = {};
@@ -104,15 +155,40 @@ export class MerchantService {
           where: { id: merchant.store.id },
           data: storeData,
         });
+      } else {
+        updatedStore = await tx.store.create({
+          data: {
+            merchantId: merchant.id,
+            name: params.storeName || params.name || 'Aether Mart Store',
+            description: params.description || undefined,
+            address: params.storeAddress || params.address || 'Store Location Address',
+            latitude: params.latitude ?? 12.9716,
+            longitude: params.longitude ?? 77.5946,
+            deliveryRadiusKm: params.deliveryRadiusKm ?? 5.0,
+            openingTime: params.openingTime || '08:00',
+            closingTime: params.closingTime || '22:00',
+            isOpen: params.isOpen ?? true,
+            isPaused: params.isPaused ?? false,
+            isHoliday: params.isHoliday ?? false,
+            minimumOrderValue: params.minimumOrderValue ?? 0,
+            deliveryFee: params.deliveryFee ?? 0,
+            logoUrl: params.logoUrl || undefined,
+            bannerUrl: params.bannerUrl || undefined,
+            upiId: params.upiId || undefined,
+            contactPhone: params.contactPhone || undefined,
+            contactEmail: params.contactEmail || undefined,
+            businessType: params.businessType || undefined,
+          },
+        });
       }
 
       // Write audit log
       await merchantRepository.writeAuditLog(
         userId,
-        'UPDATE_PROFILE',
-        'MERCHANT',
+        'MERCHANT_PROFILE_UPDATE',
+        'Merchant',
         merchant.id,
-        merchant,
+        { merchant, store: merchant.store },
         { merchant: updatedMerchant, store: updatedStore },
         tx
       );

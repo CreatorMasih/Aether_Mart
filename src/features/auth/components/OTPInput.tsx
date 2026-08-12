@@ -17,6 +17,13 @@ export const OTPInput: React.FC<OTPInputProps> = ({
   const [digits, setDigits] = useState<string[]>(Array(length).fill(''));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Auto-focus first input on mount
+  useEffect(() => {
+    if (!disabled && inputRefs.current[0]) {
+      inputRefs.current[0].focus();
+    }
+  }, [disabled]);
+
   // Sync state with parent value
   useEffect(() => {
     const valueDigits = value.split('').slice(0, length);

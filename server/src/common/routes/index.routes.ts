@@ -57,4 +57,8 @@ router.use('/admin', adminRoutes);
 import postalRoutes from '../../modules/postal/postal.routes';
 router.use('/postal', postalRoutes);
 
+// ── Location & Serviceability ──────────────────────────────────────────────────
+import locationRoutes from '../../modules/location/location.routes';
+router.use('/location', locationRoutes);
+
 export default router;

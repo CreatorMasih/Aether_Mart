@@ -25,6 +25,9 @@ import { cn } from '../../../utils/cn';
 import { pageTransition, cardHover } from '../../../core/theme/animations';
 import type { CatalogProduct } from '../services/catalog-mappers';
 
+import { NotServiceableState } from '../../../components/ui/NotServiceableState';
+import { LocationPickerModal } from '../../../components/ui/LocationPickerModal';
+
 export const ProductListingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const [searchParams] = useSearchParams();
@@ -33,7 +36,9 @@ export const ProductListingPage: React.FC = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  const { toggleWishlist: storeToggleWishlist } = useCustomerStore();
+  const { selectedAddress, toggleWishlist: storeToggleWishlist } = useCustomerStore();
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const isServiceable = selectedAddress ? selectedAddress.isServiceable !== false : true;
   const { addToCart, updateQuantity } = useCartMutations();
 
   // Read cart items from React Query cache (single source of truth)
@@ -128,6 +133,7 @@ export const ProductListingPage: React.FC = () => {
   const { data: pageData, isLoading, isFetching, isError } = useQuery({
     queryKey: queryKeys.products(queryParams),
     queryFn: () => catalogService.getProducts(queryParams),
+    enabled: isServiceable,
   });
 
   // Reset page and products when parameters change
@@ -179,6 +185,18 @@ export const ProductListingPage: React.FC = () => {
   const pageTitle = searchQuery 
     ? `Search Results for "${searchQuery}"` 
     : activeCategory?.name || 'All Catalog Products';
+
+  if (!isServiceable) {
+    return (
+      <>
+        <NotServiceableState
+          currentLocationName={selectedAddress?.city || selectedAddress?.postalCode || 'your area'}
+          onChangeLocationClick={() => setIsLocationModalOpen(true)}
+        />
+        <LocationPickerModal isOpen={isLocationModalOpen} onClose={() => setIsLocationModalOpen(false)} />
+      </>
+    );
+  }
 
   if (isLoading && page === 1) {
     return (
