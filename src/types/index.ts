@@ -9,17 +9,43 @@ export interface GeoCoordinates {
   longitude: number;
 }
 
+export type AddressLabel = 'Home' | 'Work' | 'Other';
+
 export interface Address {
   id: string;
-  label: 'Home' | 'Work' | 'Other';
+  label: AddressLabel;
   receiverName: string;
   receiverPhone: string;
   streetAddress: string;
   apartmentSuite?: string;
   postalCode: string;
   city: string;
+  district?: string;
+  state?: string;
   coordinates: GeoCoordinates;
+  isServiceable?: boolean;
 }
+
+export type LocationSelectionType = 'SAVED' | 'GPS' | 'SEARCH' | 'PRESET';
+
+export interface CustomerLocation {
+  id: string;
+  selectionType: LocationSelectionType;
+  label: string;
+  savedLabel?: AddressLabel;
+  receiverName?: string;
+  receiverPhone?: string;
+  streetAddress: string;
+  apartmentSuite?: string;
+  postalCode: string;
+  city: string;
+  district?: string;
+  state?: string;
+  coordinates?: GeoCoordinates;
+  isServiceable: boolean;
+}
+
+export type SelectedLocation = CustomerLocation | Address;
 
 export interface User {
   id: string;

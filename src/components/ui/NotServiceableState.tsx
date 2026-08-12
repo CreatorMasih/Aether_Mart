@@ -1,6 +1,6 @@
 import React from 'react';
 import { MapPin, Navigation, ArrowRight } from 'lucide-react';
-import { DEFAULT_MAHASAMUND_ADDRESS } from '../../core/config/serviceability';
+import { DEFAULT_MAHASAMUND_LOCATION } from '../../core/config/serviceability';
 import { useCustomerStore } from '../../features/customer-catalog/store/customer-store';
 
 interface NotServiceableStateProps {
@@ -15,7 +15,7 @@ export const NotServiceableState: React.FC<NotServiceableStateProps> = ({
   const { setSelectedAddress } = useCustomerStore();
 
   const handleSwitchToMahasamund = () => {
-    setSelectedAddress(DEFAULT_MAHASAMUND_ADDRESS);
+    setSelectedAddress(DEFAULT_MAHASAMUND_LOCATION);
   };
 
   return (

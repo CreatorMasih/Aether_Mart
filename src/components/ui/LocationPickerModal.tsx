@@ -4,8 +4,8 @@ import { useCustomerStore } from '../../features/customer-catalog/store/customer
 import { useAuthStore } from '../../features/auth/store/auth-store';
 import { useToast } from '../../hooks/useToast';
 import { apiClient } from '../../core/network/api-client';
-import { checkLocationServiceability, DEFAULT_MAHASAMUND_ADDRESS } from '../../core/config/serviceability';
-import type { Address } from '../../types';
+import { checkLocationServiceability, DEFAULT_MAHASAMUND_LOCATION } from '../../core/config/serviceability';
+import type { CustomerLocation, Address } from '../../types';
 
 interface LocationPickerModalProps {
   isOpen: boolean;
@@ -16,13 +16,24 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
   const [searchQuery, setSearchQuery] = useState('');
   const [isGpsLoading, setIsGpsLoading] = useState(false);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    city: string;
+    district: string;
+    state: string;
+    pincode: string;
+    isServiceable: boolean;
+  }>>([]);
 
   const { selectedAddress, setSelectedAddress } = useCustomerStore();
   const { user } = useAuthStore();
   const { showToast } = useToast();
 
   if (!isOpen) return null;
+
+  const savedAddresses: Address[] = user?.savedAddresses || [];
 
   const handleUseGps = () => {
     if (!navigator.geolocation) {
@@ -44,8 +55,9 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
           const res = await apiClient.post('/location/reverse-geocode', { latitude: lat, longitude: lng });
           const locData = res.data.data;
 
-          const newAddress: Address = {
-            id: `addr-gps-${Date.now()}`,
+          const newLoc: CustomerLocation = {
+            id: `loc-gps-${Date.now()}`,
+            selectionType: 'GPS',
             label: 'Current GPS',
             receiverName: user?.fullName || 'Customer',
             receiverPhone: user?.phone || '',
@@ -55,10 +67,10 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
             district: locData.district,
             state: locData.state,
             coordinates: { latitude: lat, longitude: lng },
-            isServiceable: locData.isServiceable,
+            isServiceable: Boolean(locData.isServiceable),
           };
 
-          setSelectedAddress(newAddress);
+          setSelectedAddress(newLoc);
 
           if (locData.isServiceable) {
             showToast({
@@ -70,15 +82,16 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
             showToast({
               type: 'info',
               title: 'Outside Service Area',
-              description: `Aether Mart is currently active in Mahasamund only.`,
+              description: 'Aether Mart is currently active in Mahasamund only.',
             });
           }
           onClose();
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const errorMsg = err instanceof Error ? err.message : 'Unable to resolve your GPS position.';
           showToast({
             type: 'error',
             title: 'Location Check Failed',
-            description: err.message || 'Unable to resolve your GPS position.',
+            description: errorMsg,
           });
         } finally {
           setIsGpsLoading(false);
@@ -110,7 +123,6 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
 
     try {
       if (/^\d{6}$/.test(query)) {
-        // Search by PINCODE
         const res = await apiClient.get(`/postal/pincode/${query}`);
         if (res.data?.success && res.data?.data) {
           const pData = res.data.data;
@@ -140,7 +152,6 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
           });
         }
       } else {
-        // Search by CITY / AREA
         const res = await apiClient.get(`/postal/city/${encodeURIComponent(query)}`);
         if (res.data?.success && res.data?.data) {
           const cData = res.data.data;
@@ -162,7 +173,6 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
             },
           ]);
         } else {
-          // Local fallback matching
           const serviceCheck = checkLocationServiceability({ city: query });
           setSearchResults([
             {
@@ -178,7 +188,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
           ]);
         }
       }
-    } catch (err: any) {
+    } catch (_err) {
       const serviceCheck = checkLocationServiceability({ city: query, pincode: query });
       setSearchResults([
         {
@@ -197,10 +207,19 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
     }
   };
 
-  const handleSelectResult = (item: any) => {
+  const handleSelectSearchResult = (item: {
+    title: string;
+    subtitle: string;
+    pincode: string;
+    city: string;
+    district: string;
+    state: string;
+    isServiceable: boolean;
+  }) => {
     const isServiceable = item.isServiceable;
-    const newAddress: Address = {
-      id: `addr-search-${Date.now()}`,
+    const newLoc: CustomerLocation = {
+      id: `loc-search-${Date.now()}`,
+      selectionType: 'SEARCH',
       label: item.title,
       receiverName: user?.fullName || 'Customer',
       receiverPhone: user?.phone || '',
@@ -213,7 +232,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
       isServiceable,
     };
 
-    setSelectedAddress(newAddress);
+    setSelectedAddress(newLoc);
     if (isServiceable) {
       showToast({
         type: 'success',
@@ -230,30 +249,82 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
     onClose();
   };
 
-  const presets = [
+  const handleSelectSavedAddress = (addr: Address) => {
+    const isServiceable = checkLocationServiceability({
+      pincode: addr.postalCode,
+      city: addr.city,
+      district: addr.district,
+      latitude: addr.coordinates.latitude,
+      longitude: addr.coordinates.longitude,
+    }).isServiceable;
+
+    const newLoc: CustomerLocation = {
+      id: addr.id,
+      selectionType: 'SAVED',
+      label: addr.label,
+      savedLabel: addr.label,
+      receiverName: addr.receiverName,
+      receiverPhone: addr.receiverPhone,
+      streetAddress: addr.streetAddress,
+      apartmentSuite: addr.apartmentSuite,
+      postalCode: addr.postalCode,
+      city: addr.city,
+      district: addr.district,
+      state: addr.state,
+      coordinates: addr.coordinates,
+      isServiceable,
+    };
+
+    setSelectedAddress(newLoc);
+    showToast({
+      type: 'success',
+      title: 'Location Set',
+      description: `Delivering to ${addr.label}`,
+    });
+    onClose();
+  };
+
+  const presets: Array<{ id: string; name: string; pincode: string; location: CustomerLocation }> = [
     {
       id: 'preset-mahasamund-center',
       name: 'Mahasamund Main Market',
       pincode: '493445',
-      address: DEFAULT_MAHASAMUND_ADDRESS,
+      location: DEFAULT_MAHASAMUND_LOCATION,
     },
     {
       id: 'preset-mahasamund-station',
       name: 'Station Road, Mahasamund',
       pincode: '493445',
-      address: { ...DEFAULT_MAHASAMUND_ADDRESS, streetAddress: 'Station Road, Mahasamund' },
+      location: {
+        ...DEFAULT_MAHASAMUND_LOCATION,
+        id: 'loc-preset-station',
+        label: 'Station Road, Mahasamund',
+        streetAddress: 'Station Road, Mahasamund',
+      },
     },
     {
       id: 'preset-pithora',
       name: 'Pithora, Mahasamund',
       pincode: '493551',
-      address: { ...DEFAULT_MAHASAMUND_ADDRESS, streetAddress: 'Main Road, Pithora', postalCode: '493551' },
+      location: {
+        ...DEFAULT_MAHASAMUND_LOCATION,
+        id: 'loc-preset-pithora',
+        label: 'Pithora, Mahasamund',
+        streetAddress: 'Main Road, Pithora',
+        postalCode: '493551',
+      },
     },
     {
       id: 'preset-saraipali',
       name: 'Saraipali, Mahasamund',
       pincode: '493558',
-      address: { ...DEFAULT_MAHASAMUND_ADDRESS, streetAddress: 'Town Area, Saraipali', postalCode: '493558' },
+      location: {
+        ...DEFAULT_MAHASAMUND_LOCATION,
+        id: 'loc-preset-saraipali',
+        label: 'Saraipali, Mahasamund',
+        streetAddress: 'Town Area, Saraipali',
+        postalCode: '493558',
+      },
     },
   ];
 
@@ -323,7 +394,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
               {searchResults.map((res) => (
                 <button
                   key={res.id}
-                  onClick={() => handleSelectResult(res)}
+                  onClick={() => handleSelectSearchResult(res)}
                   className="w-full p-3 rounded-xl border border-border-primary hover:border-brand-emerald text-left flex items-start justify-between transition-all cursor-pointer bg-bg-secondary"
                 >
                   <div>
@@ -347,6 +418,40 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
             </div>
           )}
 
+          {/* Saved Addresses Section */}
+          {savedAddresses.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">
+                Saved Addresses
+              </span>
+              <div className="grid grid-cols-1 gap-2">
+                {savedAddresses.map((addr) => {
+                  const isSelected = selectedAddress?.id === addr.id;
+                  return (
+                    <button
+                      key={addr.id}
+                      onClick={() => handleSelectSavedAddress(addr)}
+                      className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-brand-emerald bg-brand-emerald/5 text-text-primary'
+                          : 'border-border-primary hover:border-text-secondary bg-bg-secondary'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <MapPin className="h-4 w-4 text-brand-emerald shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold text-text-primary">{addr.label}</p>
+                          <p className="text-[10px] text-text-secondary truncate">{addr.streetAddress}</p>
+                        </div>
+                      </div>
+                      {isSelected && <Check className="h-4 w-4 text-brand-emerald" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Mahasamund Serviceable Presets */}
           <div className="space-y-2 pt-2">
             <div className="flex items-center justify-between">
@@ -360,12 +465,12 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
 
             <div className="grid grid-cols-1 gap-2">
               {presets.map((preset) => {
-                const isSelected = selectedAddress?.postalCode === preset.pincode && selectedAddress?.streetAddress === preset.address.streetAddress;
+                const isSelected = selectedAddress?.postalCode === preset.pincode && selectedAddress?.streetAddress === preset.location.streetAddress;
                 return (
                   <button
                     key={preset.id}
                     onClick={() => {
-                      setSelectedAddress(preset.address);
+                      setSelectedAddress(preset.location);
                       showToast({
                         type: 'success',
                         title: 'Location Set',

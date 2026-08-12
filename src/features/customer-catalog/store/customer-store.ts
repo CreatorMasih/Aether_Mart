@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Address, Product } from '../../../types';
+import type { SelectedLocation, Product } from '../../../types';
 
 interface CustomerState {
-  selectedAddress: Address | null;
+  selectedAddress: SelectedLocation | null;
   wishlist: Product[];
   recentlyViewed: Product[];
   searchHistory: string[];
-  setSelectedAddress: (address: Address | null) => void;
+  setSelectedAddress: (address: SelectedLocation | null) => void;
   toggleWishlist: (product: Product) => void;
   addRecentlyViewed: (product: Product) => void;
   addSearchQuery: (query: string) => void;

@@ -38,11 +38,29 @@ export const SERVICEABILITY_CONFIG: {
   ],
 };
 
-export const DEFAULT_MAHASAMUND_ADDRESS = {
+import type { Address, CustomerLocation } from '../../types';
+
+export const DEFAULT_MAHASAMUND_ADDRESS: Address = {
   id: 'addr-default-mahasamund',
   label: 'Home',
   receiverName: 'Customer',
   receiverPhone: '',
+  streetAddress: 'Main Market, Station Road, Mahasamund',
+  postalCode: '493445',
+  city: 'Mahasamund',
+  district: 'Mahasamund',
+  state: 'Chhattisgarh',
+  coordinates: {
+    latitude: 21.1085,
+    longitude: 82.0965,
+  },
+  isServiceable: true,
+};
+
+export const DEFAULT_MAHASAMUND_LOCATION: CustomerLocation = {
+  id: 'loc-default-mahasamund',
+  selectionType: 'PRESET',
+  label: 'Mahasamund',
   streetAddress: 'Main Market, Station Road, Mahasamund',
   postalCode: '493445',
   city: 'Mahasamund',
