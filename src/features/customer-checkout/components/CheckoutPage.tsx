@@ -13,6 +13,7 @@ import {
   Plus,
   Loader2,
   Check,
+  AlertCircle,
 } from 'lucide-react';
 import { queryKeys } from '../../../core/network/queryKeys';
 import { cartService } from '../services/cart-service';
@@ -216,6 +217,13 @@ export const CheckoutPage: React.FC = () => {
     };
   }, [cart.items, appliedCoupon, driverTip, ecoPackaging, selectedAddress]);
 
+  // ─── Customer Wallet Balance Query ───────────────────────────────────────
+  const { data: walletData } = useQuery({
+    queryKey: ['customer', 'wallet'],
+    queryFn: () => orderService.getWallet(),
+    staleTime: 30_000,
+  });
+
   // ─── POST /cart/recalculate — backend pricing (source of truth) ───────────
   const {
     data: pricing = EMPTY_PRICING,
@@ -378,8 +386,8 @@ export const CheckoutPage: React.FC = () => {
         sessionStorage.removeItem('aether_pending_order');
         showToast({
           type: 'success',
-          title: 'Order Placed Successfully!',
-          description: paymentMethod === 'WALLET' ? 'Payment completed via Wallet.' : 'Order placed with Cash on Delivery.',
+          title: 'Order placed successfully! 🎉',
+          description: paymentMethod === 'WALLET' ? 'Payment completed via Wallet.' : 'Your Cash on Delivery order has been placed.',
         });
         navigate('/c/orders/confirm', {
           replace: true,
@@ -405,8 +413,16 @@ export const CheckoutPage: React.FC = () => {
           title = 'Cart Empty';
           description = 'Your cart is empty. Please add items before placing an order.';
           break;
+        case 'WALLET_INSUFFICIENT_BALANCE':
+          title = 'Insufficient Balance';
+          description = 'Your wallet balance is insufficient.';
+          break;
         default:
-          description = 'Unable to start payment. Please try again.';
+          if (paymentMethod === 'RAZORPAY') {
+            description = 'Unable to start payment. Please try again.';
+          } else {
+            description = parsed.message || 'Couldn\'t place your order. Please try again.';
+          }
           break;
       }
 
@@ -447,8 +463,17 @@ export const CheckoutPage: React.FC = () => {
       });
       return;
     }
+    if (paymentMethod === 'WALLET' && walletData && walletData.balance < pricing.totalAmount) {
+      showToast({
+        type: 'error',
+        title: 'Insufficient Balance',
+        description: 'Your wallet balance is insufficient.',
+      });
+      return;
+    }
+
     placeOrderMutation.mutate();
-  }, [selectedAddress, cart.items.length, pendingOrder, placeOrderMutation, showToast]);
+  }, [selectedAddress, cart.items.length, pendingOrder, paymentMethod, walletData, pricing.totalAmount, placeOrderMutation, showToast]);
 
   // ─── Empty cart guard ─────────────────────────────────────────────────────
   if (cart.items.length === 0 && !placeOrderMutation.isPending) {
@@ -677,53 +702,98 @@ export const CheckoutPage: React.FC = () => {
             {[
               {
                 id: 'COD',
-                title: 'Cash on Delivery / Pay on Delivery',
-                desc: 'Pay cash or UPI QR upon receiving your order',
+                title: 'Cash on Delivery',
+                desc: 'Pay when your order arrives (Cash or UPI QR)',
                 badge: 'Popular',
               },
               {
                 id: 'WALLET',
                 title: 'Aether Pay Wallet',
-                desc: 'Instant 1-click checkout with wallet balance',
+                desc: 'Instant 1-click checkout using your wallet balance',
                 badge: 'Fastest',
               },
               {
                 id: 'RAZORPAY',
-                title: 'UPI / Cards / NetBanking (Razorpay)',
-                desc: 'Google Pay, PhonePe, Cards & Netbanking',
+                title: 'UPI / Cards / NetBanking',
+                desc: 'Secure online payment via Razorpay Test Mode',
                 badge: 'Online',
               },
             ].map((method) => {
               const isSelected = paymentMethod === method.id;
+              const isWallet = method.id === 'WALLET';
+              const isInsufficientWallet = isWallet && walletData != null && walletData.balance < pricing.totalAmount;
+
               return (
-                <button
-                  key={method.id}
-                  onClick={() => setPaymentMethod(method.id as PaymentMethod)}
-                  className={cn(
-                    'w-full text-left p-4 rounded-xl border flex items-center justify-between transition-all cursor-pointer',
-                    isSelected
-                      ? 'border-brand-emerald bg-brand-emerald/5'
-                      : 'border-border-primary bg-bg-secondary hover:border-text-secondary',
+                <div key={method.id} className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod(method.id as PaymentMethod)}
+                    className={cn(
+                      'w-full text-left p-4 rounded-xl border flex items-center justify-between transition-all cursor-pointer select-none',
+                      isSelected
+                        ? 'border-brand-emerald bg-brand-emerald/5 shadow-sm'
+                        : 'border-border-primary bg-bg-secondary hover:border-text-secondary',
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          'w-4 h-4 rounded-full border flex items-center justify-center shrink-0',
+                          isSelected ? 'border-brand-emerald bg-brand-emerald' : 'border-text-tertiary',
+                        )}
+                      >
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold block text-text-primary font-heading">{method.title}</span>
+                        <span className="text-[10px] text-text-secondary block mt-0.5">{method.desc}</span>
+                        {isWallet && walletData != null && (
+                          <span
+                            className={cn(
+                              'text-[11px] font-bold block mt-1',
+                              isInsufficientWallet ? 'text-red-500' : 'text-brand-emerald',
+                            )}
+                          >
+                            Available Balance: {formatCurrency(walletData.balance)}
+                            {isInsufficientWallet && ' (Insufficient)'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald uppercase shrink-0">
+                      {method.badge}
+                    </span>
+                  </button>
+
+                  {/* Warning banner when selected Wallet is insufficient */}
+                  {isSelected && isInsufficientWallet && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs font-semibold text-red-600 dark:text-red-400 space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>Insufficient Wallet Balance</span>
+                      </div>
+                      <p className="text-[11px] opacity-90 leading-relaxed">
+                        Your wallet balance ({formatCurrency(walletData?.balance ?? 0)}) is less than the order total ({formatCurrency(pricing.totalAmount)}).
+                      </p>
+                      <div className="pt-1 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod('COD')}
+                          className="text-[11px] font-bold text-brand-emerald hover:underline cursor-pointer"
+                        >
+                          [ Choose Cash on Delivery ]
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMethod('RAZORPAY')}
+                          className="text-[11px] font-bold text-brand-emerald hover:underline cursor-pointer"
+                        >
+                          [ Pay via UPI/Card ]
+                        </button>
+                      </div>
+                    </div>
                   )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        'w-4 h-4 rounded-full border flex items-center justify-center',
-                        isSelected ? 'border-brand-emerald bg-brand-emerald' : 'border-text-tertiary',
-                      )}
-                    >
-                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold block">{method.title}</span>
-                      <span className="text-[10px] text-text-secondary block">{method.desc}</span>
-                    </div>
-                  </div>
-                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald uppercase">
-                    {method.badge}
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -890,12 +960,20 @@ export const CheckoutPage: React.FC = () => {
             {placeOrderMutation.isPending || isProcessingPayment ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Processing Payment...</span>
+                <span>
+                  {paymentMethod === 'RAZORPAY'
+                    ? 'Processing Payment...'
+                    : 'Placing Order...'}
+                </span>
               </>
             ) : (
               <>
                 <span>
-                  {paymentMethod === 'RAZORPAY' ? 'Pay Online' : 'Place Order'} • {formatCurrency(pricing.totalAmount)}
+                  {paymentMethod === 'COD'
+                    ? `Place Order • ${formatCurrency(pricing.totalAmount)}`
+                    : paymentMethod === 'WALLET'
+                    ? `Pay from Wallet • ${formatCurrency(pricing.totalAmount)}`
+                    : `Pay Securely • ${formatCurrency(pricing.totalAmount)}`}
                 </span>
                 <ArrowRight className="h-4 w-4" />
               </>

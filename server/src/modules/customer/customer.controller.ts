@@ -67,6 +67,21 @@ export class CustomerController {
       next(error);
     }
   };
+
+  public getWallet = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const wallet = await customerService.getWallet(userId);
+      sendSuccess(res, wallet, 'Wallet details fetched successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const customerController = new CustomerController();

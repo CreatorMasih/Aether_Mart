@@ -1,5 +1,6 @@
 import { customerRepository } from './customer.repository';
 import { authRepository } from '../auth/auth.repository';
+import { prisma } from '../../config/database.config';
 import { NotFoundError, ForbiddenError } from '../../common/middlewares/errorHandler.middleware';
 import { Address } from '@prisma/client';
 
@@ -47,6 +48,19 @@ export class CustomerService {
       throw new ForbiddenError('Not authorized to access this address');
     }
     await customerRepository.deleteAddress(id);
+  }
+
+  public async getWallet(userId: string): Promise<any> {
+    await this.ensureCustomerProfile(userId);
+    const profile = await authRepository.findUserWithProfile(userId);
+    const customerId = profile?.customer?.id;
+    if (!customerId) return { balance: 0.0 };
+
+    let wallet = await prisma.wallet.findUnique({ where: { customerId } });
+    if (!wallet) {
+      wallet = await prisma.wallet.create({ data: { customerId, balance: 0.0 } });
+    }
+    return wallet;
   }
 }
 

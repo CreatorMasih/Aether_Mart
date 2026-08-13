@@ -112,6 +112,17 @@ export class OrderService extends BaseRepository {
       };
     });
   }
+  /**
+   * Fetches the customer's wallet details.
+   */
+  public async getWallet(): Promise<{ id?: string; balance: number }> {
+    return this.executeRequest(async () => {
+      const response = await this.client.get<ApiEnvelope<{ id?: string; balance: number }>>(
+        '/customer/wallet',
+      );
+      return response.data.data ?? { balance: 0.0 };
+    });
+  }
 }
 
 export const orderService = new OrderService();
