@@ -31,10 +31,21 @@ export const StoreCardGrid: React.FC<StoreCardGridProps> = ({ stores }) => {
             <div className="flex gap-3 items-start">
               {/* Logo / Image Circle */}
               <div className="h-14 w-14 rounded-xl bg-bg-tertiary border border-border-primary/60 overflow-hidden flex items-center justify-center text-2xl shadow-subtle flex-shrink-0">
-                {store.logoUrl && store.logoUrl.startsWith('http') ? (
-                  <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
+                {store.logoUrl &&
+                typeof store.logoUrl === 'string' &&
+                (store.logoUrl.startsWith('http://') ||
+                  store.logoUrl.startsWith('https://') ||
+                  store.logoUrl.startsWith('data:image/')) ? (
+                  <img
+                    src={store.logoUrl}
+                    alt={store.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
                 ) : (
-                  <span>{store.logoUrl || '🏪'}</span>
+                  <span>{store.logoUrl && store.logoUrl.length <= 4 ? store.logoUrl : '🏪'}</span>
                 )}
               </div>
 

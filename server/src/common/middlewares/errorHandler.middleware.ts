@@ -202,7 +202,7 @@ export function errorHandler(
     stack: unknownErr.stack,
     path: req.path,
     method: req.method,
-    userId: req.user?.userId,
+    userId: (req as any).user?.userId,
   });
 
   const isDev = process.env.NODE_ENV === 'development';

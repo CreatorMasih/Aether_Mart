@@ -14,7 +14,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   res.on('finish', () => {
     const duration = Date.now() - startTime;
     const statusCode = res.statusCode;
-    const userId = req.user?.userId;
+    const userId = (req as any).user?.userId;
 
     const logData = {
       method,

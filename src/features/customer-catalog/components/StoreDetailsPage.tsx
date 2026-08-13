@@ -106,10 +106,21 @@ export const StoreDetailsPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="flex items-end gap-4">
               <div className="h-20 w-20 rounded-2xl bg-bg-secondary border-2 border-border-primary overflow-hidden flex items-center justify-center text-3xl shadow-high shrink-0">
-                {store.logoUrl && store.logoUrl.startsWith('http') ? (
-                  <img src={store.logoUrl} alt={store.name} className="w-full h-full object-cover" />
+                {store.logoUrl &&
+                typeof store.logoUrl === 'string' &&
+                (store.logoUrl.startsWith('http://') ||
+                  store.logoUrl.startsWith('https://') ||
+                  store.logoUrl.startsWith('data:image/')) ? (
+                  <img
+                    src={store.logoUrl}
+                    alt={store.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
                 ) : (
-                  <span>{store.logoUrl || '🏪'}</span>
+                  <span>{store.logoUrl && store.logoUrl.length <= 4 ? store.logoUrl : '🏪'}</span>
                 )}
               </div>
 

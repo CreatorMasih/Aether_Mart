@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
   CheckCircle2,
@@ -26,6 +27,7 @@ interface SetupTask {
 }
 
 export const MerchantDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
@@ -106,6 +108,29 @@ export const MerchantDashboard: React.FC = () => {
             <div key={n} className="h-28 bg-border/30 rounded-2xl" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  // Clear Onboarding State when Store does not exist yet
+  if (!store) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center space-y-6 max-w-md mx-auto">
+        <div className="p-4 rounded-3xl bg-brand-primary/10 text-brand-primary">
+          <StoreIcon className="w-12 h-12" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-text-primary">Let's set up your store</h2>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Complete your store profile to start receiving orders from customers in your area.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/merchant/profile')}
+          className="px-6 py-3 bg-brand-primary text-white font-bold text-xs rounded-xl shadow-md hover:bg-brand-primary/90 cursor-pointer transition-colors"
+        >
+          Set Up Store
+        </button>
       </div>
     );
   }

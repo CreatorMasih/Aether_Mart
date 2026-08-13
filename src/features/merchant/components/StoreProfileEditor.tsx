@@ -322,6 +322,8 @@ export const StoreProfileEditor: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+      queryClient.invalidateQueries({ queryKey: ['homeFeed'] });
+      queryClient.invalidateQueries({ queryKey: ['stores'] });
       showToast({
         type: 'success',
         title: 'Store Profile Saved! 🏬',

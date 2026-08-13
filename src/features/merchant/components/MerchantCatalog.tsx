@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -11,6 +12,7 @@ import {
   Barcode as BarcodeIcon,
   FileSpreadsheet,
   X,
+  Store as StoreIcon,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../core/network/queryKeys';
@@ -41,6 +43,7 @@ const CATEGORY_SKU_PREFIXES: Record<string, string> = {
 };
 
 export const MerchantCatalog: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
@@ -163,19 +166,24 @@ export const MerchantCatalog: React.FC = () => {
         images,
       };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+      setHasDraft(true);
     }
   }, [newName, selectedCategoryId, newPrice, newStock, newSku, newBrand, newUnit, newMrp, newTaxRate, newDesc, newOrganic, newVeg, images]);
 
   const handleRestoreDraft = () => {
+    const savedDraft = localStorage.getItem(DRAFT_KEY);
+    if (!savedDraft) return;
     try {
-      const savedDraft = localStorage.getItem(DRAFT_KEY);
-      if (savedDraft) {
-        const parsed = JSON.parse(savedDraft);
+      const parsed = JSON.parse(savedDraft);
+      if (parsed) {
         if (parsed.newName) setNewName(parsed.newName);
         if (parsed.selectedCategoryId) setSelectedCategoryId(parsed.selectedCategoryId);
         if (parsed.newPrice !== undefined) setNewPrice(parsed.newPrice);
         if (parsed.newStock !== undefined) setNewStock(parsed.newStock);
-        if (parsed.newSku) setNewSku(parsed.newSku);
+        if (parsed.newSku) {
+          setNewSku(parsed.newSku);
+          setIsCustomSku(true);
+        }
         if (parsed.newBrand) setNewBrand(parsed.newBrand);
         if (parsed.newUnit) setNewUnit(parsed.newUnit);
         if (parsed.images) setImages(parsed.images);
@@ -200,6 +208,8 @@ export const MerchantCatalog: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.merchantProducts(store?.id || '') });
       queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+      queryClient.invalidateQueries({ queryKey: ['homeFeed'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products() });
       showToast({ type: 'success', title: 'Product Added Successfully! 🎉', description: 'Item is now live in your store.' });
       setShowAddModal(false);
       localStorage.removeItem(DRAFT_KEY);
@@ -301,6 +311,29 @@ export const MerchantCatalog: React.FC = () => {
     });
     queryClient.invalidateQueries({ queryKey: queryKeys.merchantProducts(store?.id || '') });
   };
+
+  // Require store profile setup before catalog operations
+  if (!store) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center space-y-6 max-w-lg mx-auto">
+        <div className="p-4 rounded-3xl bg-status-warning/10 text-status-warning">
+          <StoreIcon className="w-12 h-12" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-text-primary">Please complete your Store Profile before adding products.</h2>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            You need an active store profile with name, address, and delivery settings before adding products to your catalog.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/merchant/profile')}
+          className="px-6 py-3 bg-brand-emerald text-white font-bold text-xs rounded-xl shadow-md hover:bg-brand-emerald-hover cursor-pointer transition-colors"
+        >
+          Complete Store Profile
+        </button>
+      </div>
+    );
+  }
 
   if (productsLoading) {
     return (
