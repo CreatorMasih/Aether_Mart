@@ -271,9 +271,34 @@ export interface OrderData {
   customerId: string;
   storeId: string;
   storeName: string;
+  store?: {
+    id: string;
+    name: string;
+    address?: string;
+    latitude: number;
+    longitude: number;
+  } | null;
   items: OrderItemData[];
   status: OrderStatus;
   deliveryAddress: Address;
+  deliveryAssignment?: {
+    id?: string;
+    status?: string;
+    pickupOtp?: string;
+    deliveryOtp?: string;
+    lastLatitude?: number;
+    lastLongitude?: number;
+    rider?: {
+      id?: string;
+      fullName?: string;
+      phone?: string;
+      vehicleType?: string;
+      vehiclePlateNumber?: string;
+      currentLatitude?: number;
+      currentLongitude?: number;
+      isOnline?: boolean;
+    } | null;
+  } | null;
   paymentMethod: PaymentMethod;
   paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
   payment?: { id: string; status: string; gatewayOrderId?: string | null } | null;

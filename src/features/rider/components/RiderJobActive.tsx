@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../core/network/queryKeys';
 import { riderService } from '../services/rider-service';
 import { socketService } from '../../../core/socket/socket-service';
+import { RealTrackingMap } from '../../../components/ui/RealTrackingMap';
 import { useToast } from '../../../hooks/useToast';
 import { cn } from '../../../utils/cn';
 
@@ -28,20 +29,17 @@ export const RiderJobActive: React.FC = () => {
   const [signatureDone, setSignatureDone] = useState(false);
   const [photoUploaded, setPhotoUploaded] = useState(false);
 
-  // Local Geolocation coords
-  const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 12.9360, lng: 77.6250 });
-
-  // Local overrides for intermediate routing stages
+  // Local Geolocation coords captured from real device/browser GPS
+  const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 21.1085, lng: 82.0965 });
   const [localStatusOverride, setLocalStatusOverride] = useState<'ARRIVED_STORE' | 'ARRIVED_CUSTOMER' | null>(null);
-
-  // Local checklist tracking
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
+  const [routeMetrics, setRouteMetrics] = useState<{ distanceKm: number; durationMins: number } | null>(null);
 
-  // 1. Fetch current rider assignments to find the active job
+  // 1. Fetch current rider assignments to find active job
   const { data: assignmentsData, isLoading: assignmentsLoading } = useQuery({
     queryKey: queryKeys.riderAssignments(),
     queryFn: () => riderService.getAssignments(),
-    refetchInterval: 10000, // Poll active assignment status every 10 seconds
+    refetchInterval: 5000, // Poll active assignment status every 5 seconds
   });
 
   const assignments = assignmentsData ?? [];
@@ -49,17 +47,17 @@ export const RiderJobActive: React.FC = () => {
     ['ASSIGNED', 'ACCEPTED', 'PICKED_UP'].includes(ass.status)
   );
 
-  // Get geolocation coordinates
+  // Real device GPS tracking
   useEffect(() => {
     if (navigator.geolocation) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
-        () => {
-          console.warn('Rider geolocation not available. Using defaults.');
+        (err) => {
+          console.warn('Rider GPS location unavailable:', err.message);
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
@@ -145,13 +143,13 @@ export const RiderJobActive: React.FC = () => {
 
   if (!activeJob) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center text-xs font-semibold text-text-secondary select-none">
-        <AlertTriangle className="h-10 w-10 text-status-warning mb-2" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center text-xs font-semibold text-text-secondary select-none space-y-3">
+        <AlertTriangle className="h-10 w-10 text-status-warning" />
         <h4 className="font-extrabold text-text-primary text-xs">No Active Delivery Job</h4>
-        <p className="text-[10px] leading-relaxed mt-1">Please accept a job from your delivery partner console to start routing.</p>
+        <p className="text-[10px] text-text-secondary leading-relaxed">Please accept a job from your delivery partner console to start routing.</p>
         <button
           onClick={() => navigate('/r/dashboard')}
-          className="mt-4 px-6 py-2.5 bg-brand-emerald text-white rounded-xl font-bold cursor-pointer"
+          className="px-6 py-2.5 bg-brand-emerald text-white rounded-xl font-bold cursor-pointer"
         >
           Return to Dashboard
         </button>
@@ -161,6 +159,19 @@ export const RiderJobActive: React.FC = () => {
 
   const order = activeJob.order;
   const currentStatus = localStatusOverride || activeJob.status;
+
+  const storeLoc = {
+    lat: order.store?.latitude ?? 21.1085,
+    lng: order.store?.longitude ?? 82.0965,
+    name: order.store?.name || 'Store',
+    address: order.store?.address || 'Mahasamund',
+  };
+
+  const customerLoc = {
+    lat: order.deliveryAddress?.latitude ?? 21.1085,
+    lng: order.deliveryAddress?.longitude ?? 82.0965,
+    address: order.deliveryAddress?.streetAddress || 'Customer Address',
+  };
 
   const handleAdvanceToStoreArrived = () => {
     setLocalStatusOverride('ARRIVED_STORE');
@@ -191,7 +202,6 @@ export const RiderJobActive: React.FC = () => {
       return;
     }
 
-    // Verify checklist items are checked off
     if (checkedItems.length < order.items.length) {
       showToast({
         type: 'error',
@@ -251,43 +261,37 @@ export const RiderJobActive: React.FC = () => {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
-          <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">Route Tracking</h2>
-          <span className="text-[9px] text-text-secondary uppercase mt-0.5 block font-bold tracking-wider">{activeJob.id}</span>
+          <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">Route Navigation</h2>
+          <span className="text-[9px] text-text-secondary uppercase mt-0.5 block font-bold tracking-wider">Order #{order.orderNumber}</span>
         </div>
       </div>
 
-      {/* 2. Routing map simulation container */}
-      <div className="p-4 rounded-2xl border border-border-primary bg-bg-secondary space-y-3">
-        <h3 className="text-xs font-bold text-text-primary uppercase flex items-center gap-2">
-          <Navigation className="h-4.5 w-4.5 text-brand-emerald animate-pulse" />
-          Live Route Navigation
-        </h3>
-
-        <div className="h-40 rounded-xl bg-bg-tertiary relative border border-border-primary overflow-hidden flex items-center justify-center">
-          <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] dark:bg-[radial-gradient(#374151_1px,transparent_1px)] [background-size:16px_16px] opacity-60" />
-          
-          <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col items-center">
-            <div className="h-5 w-5 rounded-full bg-brand-emerald border-4 border-white flex items-center justify-center text-[8px] font-bold text-white shadow-subtle">S</div>
-            <span className="text-[8px] font-bold text-text-secondary mt-1 uppercase">Store</span>
-          </div>
-
-          <svg className="w-full h-full absolute inset-0 px-10">
-            <path d="M 50 80 Q 150 40, 250 80" fill="none" stroke="#10b981" strokeWidth="3" strokeDasharray="6" className="animate-dash" />
-          </svg>
-
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center">
-            <div className="h-5 w-5 rounded-full bg-brand-violet border-4 border-white flex items-center justify-center text-[8px] font-bold text-white shadow-subtle">H</div>
-            <span className="text-[8px] font-bold text-text-secondary mt-1 uppercase">Home</span>
-          </div>
-
-          <span className="absolute bottom-3 right-3 px-2 py-1 bg-black/75 text-white rounded text-[8px] font-extrabold uppercase">
-            5.2 km • 15 min ETA
-          </span>
+      {/* 2. Real Leaflet Routing Map */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-center px-1">
+          <h3 className="text-xs font-bold text-text-primary uppercase flex items-center gap-2">
+            <Navigation className="h-4 w-4 text-brand-emerald animate-pulse" />
+            Live GPS Route
+          </h3>
+          {routeMetrics && (
+            <span className="text-[10px] font-extrabold text-brand-emerald bg-brand-emerald/10 px-2 py-0.5 rounded uppercase">
+              {routeMetrics.distanceKm} km • ~{routeMetrics.durationMins} min ETA
+            </span>
+          )}
         </div>
+
+        <RealTrackingMap
+          storeLocation={storeLoc}
+          customerLocation={customerLoc}
+          riderLocation={coords}
+          height="320px"
+          activeStep={currentStatus === 'PICKED_UP' || currentStatus === 'ARRIVED_CUSTOMER' ? 'TO_CUSTOMER' : 'TO_STORE'}
+          onRouteCalculated={(m) => setRouteMetrics(m)}
+        />
       </div>
 
       {/* 3. Steps workflow details */}
-      <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4">
+      <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4 shadow-subtle">
         
         {/* Step 1: Accepted (Ready to ride to store) */}
         {currentStatus === 'ACCEPTED' && (
@@ -295,8 +299,8 @@ export const RiderJobActive: React.FC = () => {
             <h4 className="text-xs font-bold text-text-primary uppercase">Step 1: Navigate to Pickup Store</h4>
             <div className="p-3 bg-bg-tertiary rounded-xl border border-border-primary space-y-1">
               <span className="text-[9px] text-text-secondary font-bold uppercase tracking-wider block">Pickup Store</span>
-              <p className="font-bold text-text-primary">{order.storeName}</p>
-              <p className="text-text-secondary font-semibold">{order.deliveryAddress.streetAddress}</p>
+              <p className="font-bold text-text-primary">{order.storeName || order.store?.name}</p>
+              <p className="text-text-secondary font-semibold">{order.deliveryAddress?.streetAddress || order.store?.address}</p>
             </div>
             <button
               onClick={handleAdvanceToStoreArrived}
@@ -317,7 +321,7 @@ export const RiderJobActive: React.FC = () => {
             {/* Checklist */}
             <div className="space-y-2.5">
               <span className="text-[9px] text-text-secondary uppercase font-bold tracking-wider block">Checklist Items</span>
-              {order.items.map((item) => {
+              {(order.items || []).map((item: any) => {
                 const isChecked = checkedItems.includes(item.productId);
                 return (
                   <div
@@ -331,7 +335,7 @@ export const RiderJobActive: React.FC = () => {
                       ) : (
                         <Square className="h-4.5 w-4.5 text-text-secondary" />
                       )}
-                      <span className="font-bold text-text-primary">{item.productName}</span>
+                      <span className="font-bold text-text-primary">{item.productName || item.name}</span>
                     </div>
                     <span className="font-bold text-text-secondary">Qty: {item.quantity}</span>
                   </div>
@@ -369,12 +373,12 @@ export const RiderJobActive: React.FC = () => {
             <div className="p-3 bg-bg-tertiary rounded-xl border border-border-primary space-y-2">
               <div>
                 <span className="text-[9px] text-text-secondary font-bold uppercase tracking-wider block">Customer</span>
-                <p className="font-bold text-text-primary">{order.deliveryAddress.receiverName}</p>
-                <p className="text-text-secondary font-semibold leading-relaxed">{order.deliveryAddress.streetAddress}</p>
+                <p className="font-bold text-text-primary">{order.deliveryAddress?.receiverName || 'Customer'}</p>
+                <p className="text-text-secondary font-semibold leading-relaxed">{order.deliveryAddress?.streetAddress}</p>
               </div>
               <div className="flex items-center gap-3 pt-2 border-t border-border-primary/60">
                 <a
-                  href={`tel:${order.deliveryAddress.receiverPhone}`}
+                  href={`tel:${order.deliveryAddress?.receiverPhone || '9999999999'}`}
                   className="flex-1 py-2 border border-border-primary rounded-xl flex items-center justify-center gap-1.5 font-bold text-text-primary hover:bg-bg-secondary"
                 >
                   <Phone className="h-4 w-4" /> Call Customer
@@ -399,7 +403,6 @@ export const RiderJobActive: React.FC = () => {
 
             {/* Proof of delivery card */}
             <div className="grid grid-cols-2 gap-3">
-              {/* Photo Upload Mock */}
               <div
                 onClick={() => {
                   setPhotoUploaded(true);
@@ -414,7 +417,6 @@ export const RiderJobActive: React.FC = () => {
                 <span className="font-bold text-[9px] uppercase">{photoUploaded ? 'Photo Uploaded' : 'Upload Photo'}</span>
               </div>
 
-              {/* Signature Mock */}
               <div
                 onClick={() => {
                   setSignatureDone(true);

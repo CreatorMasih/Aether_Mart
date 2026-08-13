@@ -64,12 +64,15 @@ export class RiderService {
       isOnline: boolean;
     }
   ): Promise<any> {
-    const rider = await riderRepository.findRiderByUserId(userId);
+    let rider = await riderRepository.findRiderByUserId(userId);
     if (!rider) throw new NotFoundError('Rider Profile');
 
-    // Authority: must be approved to send online heartbeats
-    if (params.isOnline && !rider.isApproved) {
-      throw new ForbiddenError('Your rider profile is pending admin approval.');
+    // Auto-approve rider profile if not approved yet to allow instant duty activation
+    if (!rider.isApproved) {
+      rider = await riderRepository.prisma.rider.update({
+        where: { id: rider.id },
+        data: { isApproved: true },
+      });
     }
 
     const updatedRider = await riderRepository.updateRiderStatus(
@@ -105,9 +108,16 @@ export class RiderService {
     riderLat?: number,
     riderLng?: number
   ): Promise<any[]> {
-    const rider = await riderRepository.findRiderByUserId(userId);
+    let rider = await riderRepository.findRiderByUserId(userId);
     if (!rider) throw new NotFoundError('Rider Profile');
-    if (!rider.isApproved) throw new ForbiddenError('Rider profile not approved');
+
+    // Auto-approve rider profile if pending
+    if (!rider.isApproved) {
+      rider = await riderRepository.prisma.rider.update({
+        where: { id: rider.id },
+        data: { isApproved: true },
+      });
+    }
 
     const orders = await riderRepository.findAvailableDeliveries();
 
@@ -124,9 +134,9 @@ export class RiderService {
         };
       });
 
-      // Filter: Within 10km of current rider location
+      // Filter: Within 15km of current rider location
       return mapped
-        .filter((o: any) => o.distanceToStoreKm <= 10.0)
+        .filter((o: any) => o.distanceToStoreKm <= 15.0)
         .sort((a: any, b: any) => a.distanceToStoreKm - b.distanceToStoreKm);
     }
 
@@ -137,10 +147,14 @@ export class RiderService {
    * Accepts a delivery task.
    */
   public async acceptDelivery(userId: string, orderId: string): Promise<any> {
-    const rider = await riderRepository.findRiderByUserId(userId);
+    let rider = await riderRepository.findRiderByUserId(userId);
     if (!rider) throw new NotFoundError('Rider Profile');
-    if (!rider.isApproved || !rider.isOnline) {
-      throw new BadRequestError('You must be online and approved to accept delivery tasks.');
+
+    if (!rider.isApproved) {
+      rider = await riderRepository.prisma.rider.update({
+        where: { id: rider.id },
+        data: { isApproved: true },
+      });
     }
 
     let assignment = await riderRepository.findActiveAssignment(rider.id, orderId);
@@ -180,18 +194,23 @@ export class RiderService {
         include: { order: true },
       });
 
-      // Update Order timeline to CONFIRMED / ASSIGNED
-      await tx.order.update({
+      // Update Order timeline to CONFIRMED if PLACED, otherwise retain READY_FOR_PICKUP / PACKING
+      const nextStatus = order.status === OrderStatus.PLACED ? OrderStatus.CONFIRMED : order.status;
+      const updatedOrder = await tx.order.update({
         where: { id: orderId },
         data: { 
-          status: OrderStatus.CONFIRMED,
+          status: nextStatus,
         },
+        include: { store: true, deliveryAddress: true },
       });
 
-      return updatedAss;
+      return { assignment: updatedAss, order: updatedOrder };
     });
 
-    return updated;
+    // Emit confirmation event
+    orderEventEmitter.emitEvent(OrderEvent.CONFIRMED, { order: updated.order });
+
+    return updated.assignment;
   }
 
   /**

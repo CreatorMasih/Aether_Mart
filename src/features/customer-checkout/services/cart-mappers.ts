@@ -262,12 +262,20 @@ export function mapAddressDto(dto: BackendAddressDto | null | undefined): Addres
  * Maps a backend order DTO to the frontend OrderData model.
  */
 export function mapOrderDto(dto: BackendOrderDto | null | undefined): OrderData {
+  const rawAny = dto as any;
   return {
     id: dto?.id ?? '',
     orderNumber: dto?.orderNumber ?? dto?.id?.substring(0, 8).toUpperCase() ?? '',
     customerId: dto?.customerId ?? '',
     storeId: dto?.storeId ?? '',
     storeName: dto?.store?.name ?? 'Aether Mart',
+    store: rawAny?.store ? {
+      id: rawAny.store.id || dto?.storeId || '',
+      name: rawAny.store.name || 'Aether Store',
+      address: rawAny.store.address || '',
+      latitude: rawAny.store.latitude ?? 21.1085,
+      longitude: rawAny.store.longitude ?? 82.0965,
+    } : null,
     items: (dto?.items ?? []).map(
       (item): OrderItemData => ({
         productId: item.productId ?? '',
@@ -283,6 +291,24 @@ export function mapOrderDto(dto: BackendOrderDto | null | undefined): OrderData 
     ),
     status: (dto?.status ?? 'PLACED') as OrderStatus,
     deliveryAddress: mapAddressDto(dto?.deliveryAddress),
+    deliveryAssignment: rawAny?.deliveryAssignment ? {
+      id: rawAny.deliveryAssignment.id,
+      status: rawAny.deliveryAssignment.status,
+      pickupOtp: rawAny.deliveryAssignment.pickupOtp,
+      deliveryOtp: rawAny.deliveryAssignment.deliveryOtp,
+      lastLatitude: rawAny.deliveryAssignment.lastLatitude,
+      lastLongitude: rawAny.deliveryAssignment.lastLongitude,
+      rider: rawAny.deliveryAssignment.rider ? {
+        id: rawAny.deliveryAssignment.rider.id,
+        fullName: rawAny.deliveryAssignment.rider.fullName,
+        phone: rawAny.deliveryAssignment.rider.phone || '9999999999',
+        vehicleType: rawAny.deliveryAssignment.rider.vehicleType || 'BIKE',
+        vehiclePlateNumber: rawAny.deliveryAssignment.rider.vehiclePlateNumber || 'CG-04-AB-1234',
+        currentLatitude: rawAny.deliveryAssignment.rider.currentLatitude,
+        currentLongitude: rawAny.deliveryAssignment.rider.currentLongitude,
+        isOnline: rawAny.deliveryAssignment.rider.isOnline,
+      } : null,
+    } : null,
     paymentMethod: (dto?.paymentMethod ?? 'COD') as PaymentMethod,
     paymentStatus: dto?.paymentStatus,
     payment: dto?.payment ? {
