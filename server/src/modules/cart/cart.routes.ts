@@ -4,7 +4,7 @@ import { authenticate, optionalAuthenticate } from '../../common/middlewares/aut
 
 const router = Router();
 
-router.get('/', authenticate, cartController.getCart);
+router.get('/', optionalAuthenticate, cartController.getCart);
 router.post('/add', authenticate, cartController.addItem);
 router.put('/update', authenticate, cartController.updateItem);
 router.delete('/remove/:productId', authenticate, cartController.removeItem);

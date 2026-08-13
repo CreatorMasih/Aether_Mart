@@ -128,10 +128,10 @@ export const DrawerContainer: React.FC = () => {
                     </div>
                   </div>
                   <div className="p-3 rounded-lg border border-border-primary bg-bg-secondary flex gap-3">
-                    <span className="text-xl">🥛</span>
+                    <span className="text-xl">⚡</span>
                     <div>
-                      <p className="text-xs font-bold text-text-primary">Daily Essentials Alert</p>
-                      <p className="text-[10px] text-text-secondary mt-0.5">Organic Whole Milk has been restocked at Aether Fresh Market.</p>
+                      <p className="text-xs font-bold text-text-primary">Fast Hyperlocal Delivery</p>
+                      <p className="text-[10px] text-text-secondary mt-0.5">Orders delivered in 15 minutes from nearest neighborhood stores.</p>
                     </div>
                   </div>
                 </div>

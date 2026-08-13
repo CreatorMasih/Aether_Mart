@@ -498,9 +498,9 @@ export const ProductListingPage: React.FC = () => {
           <div className="p-3 bg-bg-tertiary rounded-full w-fit mx-auto text-text-secondary">
             <AlertCircle className="h-8 w-8" />
           </div>
-          <h3 className="text-sm font-bold text-text-primary">No Matching Products</h3>
+          <h3 className="text-sm font-bold text-text-primary">No products available in this store yet.</h3>
           <p className="text-xs text-text-secondary">
-            We couldn't find any products matching your filters or query.
+            Check back soon or try searching for another item.
           </p>
           <button
             onClick={handleResetFilters}

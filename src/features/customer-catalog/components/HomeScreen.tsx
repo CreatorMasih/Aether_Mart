@@ -141,24 +141,32 @@ export const HomeScreen: React.FC = () => {
         <BannerSlider banners={feed.banners} />
       </section>
 
-      {/* 2. Instant Shop Categories Grid */}
-      <section aria-label="Browse Categories">
-        <CategoryCircleGrid />
-      </section>
-
-      {/* 3. 📍 Nearby Stores */}
-      <section aria-label="Stores near you">
-        {renderSectionHeader(<MapPin className="h-5 w-5" />, 'Stores near you', 'Hyperlocal merchants delivering in your area')}
+      {/* 2. 📍 Nearest Store & Stores near you */}
+      <section aria-label="Stores near you" className="space-y-4">
         {feed.nearbyStores.length > 0 ? (
-          <StoreCardGrid stores={feed.nearbyStores} />
+          <>
+            {/* Nearest Store */}
+            <div>
+              {renderSectionHeader(<MapPin className="h-5 w-5 text-brand-emerald" />, 'Nearest to you', 'Closest merchant delivering in 15 mins')}
+              <StoreCardGrid stores={[feed.nearbyStores[0]]} />
+            </div>
+
+            {/* Other Stores Near You */}
+            {feed.nearbyStores.length > 1 && (
+              <div>
+                {renderSectionHeader(<MapPin className="h-5 w-5" />, 'Other stores near you', 'Explore more local storefronts')}
+                <StoreCardGrid stores={feed.nearbyStores.slice(1)} />
+              </div>
+            )}
+          </>
         ) : (
           <div className="p-8 rounded-2xl border border-dashed border-border-primary bg-bg-secondary text-center space-y-3">
-            <span className="text-4xl block">😔</span>
+            <span className="text-4xl block">📍</span>
             <h3 className="text-sm font-extrabold text-text-primary font-heading">
-              No stores deliver to this location yet.
+              No stores available at your location yet.
             </h3>
             <p className="text-xs text-text-secondary max-w-xs mx-auto">
-              Try changing your location or check again later.
+              Aether Mart isn't available at this location yet. Try changing your pincode or area.
             </p>
             <button
               onClick={() => setIsLocationModalOpen(true)}
@@ -168,6 +176,11 @@ export const HomeScreen: React.FC = () => {
             </button>
           </div>
         )}
+      </section>
+
+      {/* 3. Instant Shop Categories Grid */}
+      <section aria-label="Browse Categories">
+        <CategoryCircleGrid />
       </section>
 
       {/* 7. 🛒 Continue Shopping */}

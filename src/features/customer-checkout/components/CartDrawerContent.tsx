@@ -164,13 +164,10 @@ export const CartDrawerContent: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4 p-6 text-center">
         <AlertCircle className="h-8 w-8 text-status-error" />
-        <h3 className="text-sm font-extrabold text-text-primary">Could Not Load Cart</h3>
-        <p className="text-xs text-text-secondary max-w-[200px]">
-          There was a problem fetching your cart. Please try again.
-        </p>
+        <h3 className="text-sm font-extrabold text-text-primary">Couldn't load your cart.</h3>
         <button
           onClick={() => refetch()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-brand-emerald text-white text-xs font-bold rounded-xl cursor-pointer"
+          className="flex items-center gap-2 px-5 py-2.5 bg-brand-emerald text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-brand-emerald-hover transition-colors"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Retry
@@ -186,13 +183,13 @@ export const CartDrawerContent: React.FC = () => {
         <span className="text-5xl">🛒</span>
         <h3 className="text-sm font-extrabold text-text-primary font-heading">Your cart is empty</h3>
         <p className="text-xs text-text-secondary max-w-[220px]">
-          Add something you love from nearby stores.
+          Add something from stores near you.
         </p>
         <button
           onClick={closeDrawer}
           className="px-5 py-2.5 bg-brand-emerald text-white font-bold text-xs rounded-xl shadow-subtle cursor-pointer hover:bg-brand-emerald-hover transition-colors"
         >
-          Start Shopping
+          Continue Shopping
         </button>
       </div>
     );

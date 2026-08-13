@@ -242,6 +242,31 @@ describe('⚡ PRODUCTION MVP — Full End-to-End Order Lifecycle (Customer → M
   });
 
   afterAll(async () => {
+    try {
+      await prisma.deliveryTracking.deleteMany();
+      await prisma.deliveryAssignment.deleteMany();
+      await prisma.transaction.deleteMany();
+      await prisma.payment.deleteMany();
+      await prisma.orderItem.deleteMany();
+      await prisma.order.deleteMany();
+      await prisma.cartItem.deleteMany();
+      await prisma.cart.deleteMany();
+      await prisma.inventory.deleteMany({ where: { storeId } });
+      await prisma.productVariant.deleteMany({ where: { productId } });
+      await prisma.productImage.deleteMany({ where: { productId } });
+      await prisma.product.deleteMany({ where: { storeId } });
+      await prisma.store.deleteMany({ where: { id: storeId } });
+      await prisma.merchant.deleteMany({ where: { id: merchantId } });
+      await prisma.rider.deleteMany({ where: { id: riderId } });
+      await prisma.wallet.deleteMany({ where: { customerId } });
+      await prisma.address.deleteMany({ where: { id: addressId } });
+      await prisma.customer.deleteMany({ where: { id: customerId } });
+      await prisma.user.deleteMany({
+        where: { email: { in: [customerEmail, merchantEmail, riderEmail] } },
+      });
+    } catch {
+      // Ignore cleanup error
+    }
     await disconnectDatabase();
     await disconnectCache();
   });
