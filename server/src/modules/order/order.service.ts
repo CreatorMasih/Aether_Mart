@@ -106,9 +106,9 @@ export class OrderService {
         const store = await tx.store.findUnique({ where: { id: storeId } });
         if (!store) throw new NotFoundError('Store');
 
-        if (store.isHoliday) {
+        if (store.isHoliday || !store.isOpen || store.isPaused) {
           throw new BadRequestError(
-            `Store '${store.name}' is currently closed on holiday mode.`,
+            `Store '${store.name}' is currently closed or not accepting orders.`,
             ErrorCodes.STORE_CLOSED
           );
         }

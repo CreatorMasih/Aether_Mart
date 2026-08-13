@@ -1,5 +1,7 @@
 import { BaseRepository } from '../../common/repositories/base.repository';
 import { Order, OrderItem, Payment, Transaction, OrderStatus, PaymentStatus } from '@prisma/client';
+import { BadRequestError } from '../../common/middlewares/errorHandler.middleware';
+import { ErrorCodes } from '../../utils/response.util';
 
 export class OrderRepository extends BaseRepository {
   /**
@@ -98,7 +100,7 @@ export class OrderRepository extends BaseRepository {
     const client = tx || this.db;
 
     // Decrement store inventory
-    const inventory = await client.inventory.findFirst({
+    let inventory = await client.inventory.findFirst({
       where: {
         storeId,
         productId,
@@ -106,8 +108,33 @@ export class OrderRepository extends BaseRepository {
       },
     });
 
-    if (!inventory || inventory.stockQty < qty) {
-      throw new Error(`Insufficient inventory for product ${productId}`);
+    // Auto-create inventory record from variant/product stock if missing for real products
+    if (!inventory) {
+      let initialStock = 100;
+      if (variantId) {
+        const v = await client.productVariant.findUnique({ where: { id: variantId } });
+        if (v) initialStock = v.stock;
+      } else {
+        const p = await client.product.findUnique({ where: { id: productId }, include: { variants: true } });
+        if (p?.variants?.[0]) initialStock = p.variants[0].stock;
+      }
+
+      inventory = await client.inventory.create({
+        data: {
+          storeId,
+          productId,
+          variantId: variantId || null,
+          stockQty: Math.max(initialStock, qty),
+          reservedQty: 0,
+        },
+      });
+    }
+
+    if (inventory.stockQty < qty) {
+      throw new BadRequestError(
+        `Insufficient stock for item. Only ${inventory.stockQty} left.`,
+        ErrorCodes.OUT_OF_STOCK
+      );
     }
 
     await client.inventory.update({
