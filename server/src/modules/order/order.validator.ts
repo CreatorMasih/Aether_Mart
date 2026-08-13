@@ -18,6 +18,8 @@ export const placeOrderSchema = z.object({
 export const confirmPaymentSchema = z.object({
   paymentId: z.string().min(1, 'Payment Reference is required'),
   status: z.enum(['SUCCESS', 'FAILED']),
+  razorpayPaymentId: z.string().optional(),
+  razorpaySignature: z.string().optional(),
 });
 
 export const updateOrderStatusSchema = z.object({

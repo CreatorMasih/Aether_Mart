@@ -11,6 +11,7 @@ router.post('/', authenticate, orderController.placeOrder);
 router.get('/', authenticate, orderController.getOrderHistory);
 router.get('/:id', authenticate, orderController.getOrderById);
 router.post('/:id/refund', authenticate, orderController.requestRefund);
+router.post('/:id/retry-payment', authenticate, orderController.retryPayment);
 
 // Payment confirmation (Online Razorpay callback simulated webhook)
 router.post('/confirm-payment', orderController.confirmPayment);

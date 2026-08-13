@@ -103,6 +103,8 @@ interface BackendOrderDto {
   status?: string;
   deliveryAddress?: BackendAddressDto;
   paymentMethod?: string;
+  paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  payment?: { id: string; status: string; gatewayOrderId?: string | null } | null;
   deliveryFee?: number;
   packagingFee?: number;
   handlingFee?: number;
@@ -282,6 +284,12 @@ export function mapOrderDto(dto: BackendOrderDto | null | undefined): OrderData 
     status: (dto?.status ?? 'PLACED') as OrderStatus,
     deliveryAddress: mapAddressDto(dto?.deliveryAddress),
     paymentMethod: (dto?.paymentMethod ?? 'COD') as PaymentMethod,
+    paymentStatus: dto?.paymentStatus,
+    payment: dto?.payment ? {
+      id: dto.payment.id,
+      status: dto.payment.status,
+      gatewayOrderId: dto.payment.gatewayOrderId ?? null,
+    } : null,
     deliveryFee: dto?.deliveryFee ?? 0,
     packagingFee: dto?.packagingFee ?? 0,
     handlingFee: dto?.handlingFee ?? 0,

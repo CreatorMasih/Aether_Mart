@@ -79,19 +79,37 @@ export class OrderService extends BaseRepository {
   }
 
   /**
-   * Confirms Razorpay payment status (webhook-like endpoint for client-side confirmation).
-   * Architecture is production-ready; for COD/WALLET, this is not called.
+   * Confirms Razorpay payment status (Idempotent).
    */
   public async confirmPayment(
     paymentId: string,
     status: 'SUCCESS' | 'FAILED',
+    razorpayPaymentId?: string,
   ): Promise<OrderData> {
     return this.executeRequest(async () => {
-      const response = await this.client.post<ApiEnvelope<unknown>>(
+      const response = await this.client.post<ApiEnvelope<any>>(
         '/customer/orders/confirm-payment',
-        { paymentId, status },
+        { paymentId, status, razorpayPaymentId },
       );
-      return mapOrderDto(response.data.data as Parameters<typeof mapOrderDto>[0]);
+      const data = response.data.data;
+      const orderObj = data?.order || data;
+      return mapOrderDto(orderObj as Parameters<typeof mapOrderDto>[0]);
+    });
+  }
+
+  /**
+   * Retries payment for a pending or failed order.
+   */
+  public async retryPayment(orderId: string): Promise<{ order: OrderData; payment: any }> {
+    return this.executeRequest(async () => {
+      const response = await this.client.post<ApiEnvelope<{ order: unknown; payment: unknown }>>(
+        `/customer/orders/${orderId}/retry-payment`,
+      );
+      const raw = response.data.data;
+      return {
+        order: mapOrderDto(raw.order as Parameters<typeof mapOrderDto>[0]),
+        payment: raw.payment,
+      };
     });
   }
 }

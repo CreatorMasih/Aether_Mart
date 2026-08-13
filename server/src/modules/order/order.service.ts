@@ -264,18 +264,36 @@ export class OrderService {
   }
 
   /**
-   * Confirms Razorpay Online Payment Callback.
+   * Confirms Razorpay Online Payment Callback (Idempotent).
    */
   public async confirmPayment(
     paymentId: string,
-    status: 'SUCCESS' | 'FAILED'
+    status: 'SUCCESS' | 'FAILED',
+    gatewayPaymentId?: string
   ): Promise<any> {
     const payment = await this.db.payment.findUnique({
       where: { id: paymentId },
-      include: { order: { include: { items: true } } },
+      include: { order: { include: { items: true, store: true } } },
     });
 
     if (!payment) throw new NotFoundError('Payment record');
+
+    // Idempotency check: if payment status matches requested status, return existing order cleanly
+    if (payment.status === PaymentStatus.PAID && status === 'SUCCESS') {
+      const order = await this.db.order.findUnique({
+        where: { id: payment.orderId },
+        include: { store: true, items: true, deliveryAddress: true },
+      });
+      return { order, payment };
+    }
+    if (payment.status === PaymentStatus.FAILED && status === 'FAILED') {
+      const order = await this.db.order.findUnique({
+        where: { id: payment.orderId },
+        include: { store: true, items: true, deliveryAddress: true },
+      });
+      return { order, payment };
+    }
+
     if (payment.status !== PaymentStatus.PENDING) {
       throw new BadRequestError('Payment has already been processed.', ErrorCodes.BAD_REQUEST);
     }
@@ -285,14 +303,17 @@ export class OrderService {
         // Update payment status
         const updatedPayment = await tx.payment.update({
           where: { id: paymentId },
-          data: { status: PaymentStatus.PAID, gatewayPaymentId: `pay_success_${payment.id}` },
+          data: {
+            status: PaymentStatus.PAID,
+            gatewayPaymentId: gatewayPaymentId || `pay_success_${payment.id}`,
+          },
         });
 
         // Update order status
         const updatedOrder = await tx.order.update({
           where: { id: payment.orderId },
           data: { paymentStatus: PaymentStatus.PAID },
-          include: { store: true, items: true },
+          include: { store: true, items: true, deliveryAddress: true },
         });
 
         return { order: updatedOrder, payment: updatedPayment };
@@ -306,10 +327,10 @@ export class OrderService {
         const updatedOrder = await tx.order.update({
           where: { id: payment.orderId },
           data: { status: OrderStatus.CANCELLED, paymentStatus: PaymentStatus.FAILED },
-          include: { store: true, items: true },
+          include: { store: true, items: true, deliveryAddress: true },
         });
 
-        // Release inventory
+        // Release inventory atomically
         for (const item of payment.order.items) {
           await orderRepository.releaseInventory(
             payment.order.storeId,
@@ -328,12 +349,75 @@ export class OrderService {
     if (status === 'SUCCESS') {
       orderEventEmitter.emitEvent(OrderEvent.PAYMENT_SUCCESS, { order: result.order });
       await this.rewardLoyaltyPoints(result.order.customerId, result.order.id, result.order.subtotal);
-    } else {
-      orderEventEmitter.emitEvent(OrderEvent.PAYMENT_FAILED, { order: result.order });
-      orderEventEmitter.emitEvent(OrderEvent.CANCELLED, { order: result.order });
     }
 
-    return result.order;
+    return result;
+  }
+
+  /**
+   * Retries payment for an existing pending or failed order.
+   * Atomically re-verifies inventory and resets status to PENDING without creating a duplicate order.
+   */
+  public async retryPayment(customerId: string, orderId: string): Promise<any> {
+    const order = await this.db.order.findUnique({
+      where: { id: orderId },
+      include: { items: true, payment: true, store: true },
+    });
+
+    if (!order || order.customerId !== customerId) {
+      throw new NotFoundError('Order');
+    }
+
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      throw new BadRequestError('This order has already been paid for.', ErrorCodes.BAD_REQUEST);
+    }
+
+    return this.db.$transaction(async (tx) => {
+      // If order was cancelled due to previous payment failure, re-verify and re-reserve stock
+      if (order.status === OrderStatus.CANCELLED) {
+        if (order.store.isHoliday || !order.store.isOpen) {
+          throw new BadRequestError(
+            `Store '${order.store.name}' is currently unavailable for order retry.`,
+            ErrorCodes.STORE_CLOSED
+          );
+        }
+        for (const item of order.items) {
+          await orderRepository.reserveInventory(
+            order.storeId,
+            item.productId,
+            item.variantId || null,
+            item.quantity,
+            tx
+          );
+        }
+      }
+
+      const updatedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.PLACED, paymentStatus: PaymentStatus.PENDING },
+        include: { store: true, items: true, deliveryAddress: true },
+      });
+
+      let updatedPayment = order.payment;
+      if (order.payment) {
+        updatedPayment = await tx.payment.update({
+          where: { id: order.payment.id },
+          data: { status: PaymentStatus.PENDING },
+        });
+      } else {
+        updatedPayment = await tx.payment.create({
+          data: {
+            orderId: order.id,
+            amount: order.totalAmount,
+            method: order.paymentMethod,
+            status: PaymentStatus.PENDING,
+            gatewayOrderId: `rzp_test_order_${order.id}`,
+          },
+        });
+      }
+
+      return { order: updatedOrder, payment: updatedPayment };
+    });
   }
 
   /**

@@ -26,7 +26,7 @@ import { formatCurrency } from '../../../utils/formatters';
 import { parseApiError } from '../../../core/network/api-error-parser';
 import { cn } from '../../../utils/cn';
 import { pageTransition } from '../../../core/theme/animations';
-import type { Address, PaymentMethod, CartData, PricingData, SelectedLocation } from '../../../types';
+import type { Address, PaymentMethod, CartData, PricingData, SelectedLocation, OrderData } from '../../../types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +40,26 @@ interface CheckoutLocationState {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+import { useAuthStore } from '../../auth/store/auth-store';
+import { RazorpayTestModal } from '../../../components/ui/RazorpayTestModal';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const loadRazorpayScript = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 const EMPTY_PRICING: PricingData = {
   store: null,
@@ -79,6 +99,7 @@ export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { showToast } = useToast();
+  const { user } = useAuthStore();
 
   // State passed from cart drawer
   const locationState = (location.state ?? {}) as CheckoutLocationState;
@@ -91,6 +112,11 @@ export const CheckoutPage: React.FC = () => {
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [showAddAddressModal, setShowAddAddressModal] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+
+  // ─── Pending / Retry Payment State ────────────────────────────────────────
+  const [pendingOrder, setPendingOrder] = useState<OrderData | null>(null);
+  const [showTestSimulator, setShowTestSimulator] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Sync selectedAddress when addresses load or update
   useEffect(() => {
@@ -119,6 +145,29 @@ export const CheckoutPage: React.FC = () => {
       setSelectedAddress(null);
     }
   }, [savedAddresses]);
+
+  // Check for refresh-safe pending order in sessionStorage
+  useEffect(() => {
+    const rawPending = sessionStorage.getItem('aether_pending_order');
+    if (rawPending) {
+      try {
+        const parsed = JSON.parse(rawPending) as OrderData;
+        if (parsed?.id) {
+          orderService.getOrderById(parsed.id).then((ord) => {
+            if (ord.paymentStatus === 'PENDING') {
+              setPendingOrder(ord);
+            } else {
+              sessionStorage.removeItem('aether_pending_order');
+            }
+          }).catch(() => {
+            sessionStorage.removeItem('aether_pending_order');
+          });
+        }
+      } catch (e) {
+        sessionStorage.removeItem('aether_pending_order');
+      }
+    }
+  }, []);
 
   // ─── Delivery slot ────────────────────────────────────────────────────────
   const [selectedSlot, setSelectedSlot] = useState<DeliverySlot>('EXPRESS');
@@ -207,7 +256,102 @@ export const CheckoutPage: React.FC = () => {
     },
   });
 
-  // ─── Place Order ──────────────────────────────────────────────────────────
+  // ─── Confirm Razorpay Payment Routine ────────────────────────────────────
+  const handleConfirmPayment = async (targetOrder: OrderData, status: 'SUCCESS' | 'FAILED', razorpayPaymentId?: string) => {
+    try {
+      setIsProcessingPayment(true);
+      const paymentId = targetOrder.payment?.id;
+      if (!paymentId) throw new Error('Missing payment reference');
+
+      await orderService.confirmPayment(paymentId, status, razorpayPaymentId);
+      setShowTestSimulator(false);
+      sessionStorage.removeItem('aether_pending_order');
+
+      if (status === 'SUCCESS') {
+        clearCart();
+        showToast({
+          type: 'success',
+          title: 'Payment Successful!',
+          description: 'Your test mode order was confirmed.',
+        });
+        navigate('/c/orders/confirm', {
+          replace: true,
+          state: { orderId: targetOrder.id, status: 'success' },
+        });
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Payment Failed',
+          description: 'Payment failed. Your order was not placed.',
+        });
+        setPendingOrder(targetOrder);
+      }
+    } catch (err) {
+      const parsed = parseApiError(err);
+      showToast({
+        type: 'error',
+        title: 'Payment Error',
+        description: parsed.message || 'Unable to start payment. Please try again.',
+      });
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  // ─── Initiate Razorpay Checkout Flow ─────────────────────────────────────
+  const triggerRazorpayCheckout = async (targetOrder: OrderData) => {
+    sessionStorage.setItem('aether_pending_order', JSON.stringify(targetOrder));
+    setPendingOrder(targetOrder);
+
+    const scriptLoaded = await loadRazorpayScript();
+    const RazorpayConstructor = (window as any).Razorpay;
+
+    if (scriptLoaded && RazorpayConstructor) {
+      try {
+        const options = {
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+          amount: Math.round(targetOrder.totalAmount * 100),
+          currency: 'INR',
+          name: 'Aether Mart (TEST MODE)',
+          description: `Order #${targetOrder.orderNumber}`,
+          order_id: targetOrder.payment?.gatewayOrderId || `rzp_test_order_${targetOrder.id}`,
+          handler: async function (response: any) {
+            await handleConfirmPayment(targetOrder, 'SUCCESS', response.razorpay_payment_id);
+          },
+          modal: {
+            ondismiss: function () {
+              showToast({
+                type: 'error',
+                title: 'Payment Cancelled',
+                description: 'Payment cancelled. You can try again.',
+              });
+              setPendingOrder(targetOrder);
+            },
+          },
+          prefill: {
+            name: user?.fullName || 'Customer',
+            contact: user?.phone || '',
+            email: user?.email || '',
+          },
+          theme: { color: '#059669' },
+        };
+
+        const rzp = new RazorpayConstructor(options);
+        rzp.on('payment.failed', function () {
+          handleConfirmPayment(targetOrder, 'FAILED');
+        });
+        rzp.open();
+      } catch (err) {
+        // Fallback to explicit test mode simulator modal if SDK init fails
+        setShowTestSimulator(true);
+      }
+    } else {
+      // SDK blocked/unavailable -> render explicit test payment simulator modal
+      setShowTestSimulator(true);
+    }
+  };
+
+  // ─── Place Order Mutation ─────────────────────────────────────────────────
   const placeOrderMutation = useMutation({
     mutationFn: () => {
       if (!selectedAddress?.id) throw new Error('No delivery address selected');
@@ -224,13 +368,24 @@ export const CheckoutPage: React.FC = () => {
       );
     },
     onSuccess: (orders) => {
-      // Clear cart optimistically
-      clearCart();
       const primaryOrder = orders[0];
-      navigate('/c/orders/confirm', {
-        replace: true,
-        state: { orderId: primaryOrder?.id, status: 'success' },
-      });
+      if (!primaryOrder) return;
+
+      if (paymentMethod === 'RAZORPAY') {
+        triggerRazorpayCheckout(primaryOrder);
+      } else {
+        clearCart();
+        sessionStorage.removeItem('aether_pending_order');
+        showToast({
+          type: 'success',
+          title: 'Order Placed Successfully!',
+          description: paymentMethod === 'WALLET' ? 'Payment completed via Wallet.' : 'Order placed with Cash on Delivery.',
+        });
+        navigate('/c/orders/confirm', {
+          replace: true,
+          state: { orderId: primaryOrder.id, status: 'success' },
+        });
+      }
     },
     onError: (err) => {
       const parsed = parseApiError(err);
@@ -250,15 +405,28 @@ export const CheckoutPage: React.FC = () => {
           title = 'Cart Empty';
           description = 'Your cart is empty. Please add items before placing an order.';
           break;
-        case 'PAYMENT_FAILED':
-          title = 'Payment Failed';
-          description = 'Your payment could not be processed. Please try again.';
-          break;
         default:
+          description = 'Unable to start payment. Please try again.';
           break;
       }
 
       showToast({ type: 'error', title, description });
+    },
+  });
+
+  // ─── Retry Payment Mutation ───────────────────────────────────────────────
+  const retryPaymentMutation = useMutation({
+    mutationFn: (orderId: string) => orderService.retryPayment(orderId),
+    onSuccess: ({ order }) => {
+      triggerRazorpayCheckout(order);
+    },
+    onError: (err) => {
+      const parsed = parseApiError(err);
+      showToast({
+        type: 'error',
+        title: 'Retry Failed',
+        description: parsed.message || 'Unable to start payment. Please try again.',
+      });
     },
   });
 
@@ -271,7 +439,7 @@ export const CheckoutPage: React.FC = () => {
       });
       return;
     }
-    if (cart.items.length === 0) {
+    if (cart.items.length === 0 && !pendingOrder) {
       showToast({
         type: 'error',
         title: 'Cart Empty',
@@ -280,7 +448,7 @@ export const CheckoutPage: React.FC = () => {
       return;
     }
     placeOrderMutation.mutate();
-  }, [selectedAddress, cart.items.length, placeOrderMutation, showToast]);
+  }, [selectedAddress, cart.items.length, pendingOrder, placeOrderMutation, showToast]);
 
   // ─── Empty cart guard ─────────────────────────────────────────────────────
   if (cart.items.length === 0 && !placeOrderMutation.isPending) {
@@ -689,21 +857,46 @@ export const CheckoutPage: React.FC = () => {
         </section>
 
         {/* Place Order CTA */}
+      {/* Pending Payment Alert Banner */}
+      {pendingOrder && pendingOrder.paymentStatus === 'PENDING' && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs font-semibold text-amber-600 dark:text-amber-400">
+          <div>
+            <span className="font-bold font-heading block text-sm">Pending Payment Found</span>
+            <span className="text-[11px] opacity-90">Order #{pendingOrder.orderNumber} ({formatCurrency(pendingOrder.totalAmount)})</span>
+          </div>
+          <button
+            type="button"
+            disabled={retryPaymentMutation.isPending}
+            onClick={() => retryPaymentMutation.mutate(pendingOrder.id)}
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm transition-all disabled:opacity-50"
+          >
+            {retryPaymentMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <span>Retry Payment</span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Place Order CTA */}
         <div className="space-y-3">
           <button
             type="button"
-            disabled={!selectedAddress || placeOrderMutation.isPending}
+            disabled={!selectedAddress || placeOrderMutation.isPending || isProcessingPayment}
             onClick={handlePlaceOrder}
             className="w-full flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-brand-emerald hover:bg-brand-emerald-dark text-white font-extrabold text-sm shadow-xl hover:shadow-brand-emerald/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {placeOrderMutation.isPending ? (
+            {placeOrderMutation.isPending || isProcessingPayment ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Processing Order...</span>
+                <span>Processing Payment...</span>
               </>
             ) : (
               <>
-                <span>Place Order • {formatCurrency(pricing.totalAmount)}</span>
+                <span>
+                  {paymentMethod === 'RAZORPAY' ? 'Pay Online' : 'Place Order'} • {formatCurrency(pricing.totalAmount)}
+                </span>
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
@@ -711,10 +904,27 @@ export const CheckoutPage: React.FC = () => {
 
           <div className="flex items-center justify-center gap-1.5 text-[11px] text-text-tertiary font-semibold">
             <ShieldCheck className="h-3.5 w-3.5 text-brand-emerald" />
-            <span>100% Safe & Secure Payments</span>
+            <span>100% Safe & Secure Payments (Razorpay Test Mode)</span>
           </div>
         </div>
       </div>
+
+      {/* Razorpay Test Mode Simulator Modal */}
+      <RazorpayTestModal
+        isOpen={showTestSimulator}
+        order={pendingOrder}
+        onSuccess={(razorpayPaymentId) => handleConfirmPayment(pendingOrder!, 'SUCCESS', razorpayPaymentId)}
+        onFailure={() => handleConfirmPayment(pendingOrder!, 'FAILED')}
+        onCancel={() => {
+          setShowTestSimulator(false);
+          showToast({
+            type: 'error',
+            title: 'Payment Cancelled',
+            description: 'Payment cancelled. You can try again.',
+          });
+        }}
+        isProcessing={isProcessingPayment}
+      />
 
       {/* Add / Edit Delivery Address Modal */}
       <AddAddressModal

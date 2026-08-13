@@ -275,6 +275,8 @@ export interface OrderData {
   status: OrderStatus;
   deliveryAddress: Address;
   paymentMethod: PaymentMethod;
+  paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  payment?: { id: string; status: string; gatewayOrderId?: string | null } | null;
   deliveryFee: number;
   packagingFee: number;
   handlingFee: number;

@@ -45,9 +45,34 @@ export class OrderController {
    */
   public confirmPayment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { paymentId, status } = confirmPaymentSchema.parse(req.body);
-      const order = await orderService.confirmPayment(paymentId, status);
-      sendSuccess(res, order, 'Payment process finalized');
+      const { paymentId, status, razorpayPaymentId } = confirmPaymentSchema.parse(req.body);
+      const result = await orderService.confirmPayment(paymentId, status, razorpayPaymentId);
+      sendSuccess(res, result, 'Payment process finalized');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Retries payment for a pending or failed order.
+   */
+  public retryPayment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+      let profile = await authRepository.findUserWithProfile(userId);
+      if (!profile?.customer) {
+        await authRepository.createCustomerProfile(userId, profile?.fullName || 'Customer', profile?.email || undefined);
+        profile = await authRepository.findUserWithProfile(userId);
+      }
+      const customerId = profile.customer!.id;
+      const orderId = req.params.id as string;
+
+      const result = await orderService.retryPayment(customerId, orderId);
+      sendSuccess(res, result, 'Payment retry initiated');
     } catch (error) {
       next(error);
     }
