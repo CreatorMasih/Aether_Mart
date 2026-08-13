@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Flame, History, Heart, MapPin, Sparkles, Star, Milk, Pill, Apple, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { History, MapPin, Sparkles, Star, Milk, Pill, Apple, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
 import { catalogService } from '../services/catalog-service';
@@ -15,25 +15,7 @@ import { LocationPickerModal } from '../../../components/ui/LocationPickerModal'
 
 
 export const HomeScreen: React.FC = () => {
-  const { wishlist, recentlyViewed, selectedAddress } = useCustomerStore();
-  const [countdown, setCountdown] = useState<string>('09:59');
-
-  // Simulated flash deals 10-minute ticker loop
-  useEffect(() => {
-    let totalSeconds = 599; // 9 mins 59 secs
-    const timer = setInterval(() => {
-      if (totalSeconds <= 0) {
-        totalSeconds = 599; // loop reset
-      } else {
-        totalSeconds--;
-      }
-      const mins = Math.floor(totalSeconds / 60);
-      const secs = totalSeconds % 60;
-      setCountdown(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
+  const { recentlyViewed, selectedAddress } = useCustomerStore();
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
   const lat = selectedAddress?.coordinates?.latitude;
@@ -146,8 +128,6 @@ export const HomeScreen: React.FC = () => {
   }
 
   const feed = homeFeed!;
-  const flashDealsProducts = feed.flashDeals.map((fd) => fd.product);
-  const buyAgainProducts = recentlyViewed.slice(0, 4);
 
   return (
     <motion.div
@@ -166,60 +146,29 @@ export const HomeScreen: React.FC = () => {
         <CategoryCircleGrid />
       </section>
 
-      {/* 3. 🔥 Flash Deals Countdown */}
-      {flashDealsProducts.length > 0 && (
-        <section className="p-5 rounded-2xl border border-status-error/10 bg-gradient-to-br from-status-error/5 via-bg-secondary to-bg-secondary">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-status-error/10 text-status-error shadow-subtle">
-                <Flame className="h-5 w-5 fill-status-error animate-pulse" />
-              </div>
-              <div>
-                <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2">
-                  Flash Deals
-                </h2>
-                <p className="text-[10px] text-text-secondary font-semibold mt-0.5">Closing soon! Flat 50% Off</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-status-error text-white font-heading text-xs font-extrabold shadow-subtle animate-bounce">
-              {countdown}
-            </div>
-          </div>
-          <ProductCardGrid products={flashDealsProducts} />
-        </section>
-      )}
-
-      {/* 4. 🕒 Buy Again */}
-      {buyAgainProducts.length > 0 && (
-        <section>
-          {renderSectionHeader(<History className="h-5 w-5" />, 'Buy Again', 'Based on your recent grocery orders')}
-          <ProductCardGrid products={buyAgainProducts} />
-        </section>
-      )}
-
-      {/* 5. ❤️ Wishlist Picks */}
-      <section>
-        {renderSectionHeader(<Heart className="h-5 w-5 fill-status-error text-status-error" />, 'Wishlist Picks', 'Items you have saved for later')}
-        {wishlist.length > 0 ? (
-          <ProductCardGrid products={wishlist.slice(0, 4)} />
+      {/* 3. 📍 Nearby Stores */}
+      <section aria-label="Stores near you">
+        {renderSectionHeader(<MapPin className="h-5 w-5" />, 'Stores near you', 'Hyperlocal merchants delivering in your area')}
+        {feed.nearbyStores.length > 0 ? (
+          <StoreCardGrid stores={feed.nearbyStores} />
         ) : (
-          <div className="p-6 rounded-xl border border-dashed border-border-primary text-center">
-            <p className="text-xs text-text-secondary">Your saved wishlist items will appear here.</p>
+          <div className="p-8 rounded-2xl border border-dashed border-border-primary bg-bg-secondary text-center space-y-3">
+            <span className="text-4xl block">😔</span>
+            <h3 className="text-sm font-extrabold text-text-primary font-heading">
+              No stores deliver to this location yet.
+            </h3>
+            <p className="text-xs text-text-secondary max-w-xs mx-auto">
+              Try changing your location or check again later.
+            </p>
+            <button
+              onClick={() => setIsLocationModalOpen(true)}
+              className="px-4 py-2 bg-brand-emerald text-white hover:bg-brand-emerald-hover text-xs font-bold rounded-xl cursor-pointer shadow-subtle"
+            >
+              Change Location
+            </button>
           </div>
         )}
       </section>
-
-      {/* 6. 📍 Nearby Stores */}
-      {feed.nearbyStores.length > 0 ? (
-        <section>
-          {renderSectionHeader(<MapPin className="h-5 w-5" />, 'Nearby Stores', 'Hyperlocal merchants delivering in your area')}
-          <StoreCardGrid stores={feed.nearbyStores} />
-        </section>
-      ) : (
-        <section className="p-6 rounded-2xl border border-dashed border-border-primary text-center">
-          <p className="text-xs text-text-secondary">No nearby merchants found operating in your coordinates.</p>
-        </section>
-      )}
 
       {/* 7. 🛒 Continue Shopping */}
       {recentlyViewed.length > 0 && (

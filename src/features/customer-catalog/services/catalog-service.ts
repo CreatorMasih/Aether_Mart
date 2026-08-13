@@ -286,6 +286,17 @@ export class CatalogService extends BaseRepository {
       );
     });
   }
+
+  /** Returns single store details by ID */
+  public async getStoreById(id: string, lat?: number, lng?: number): Promise<Store> {
+    return this.executeRequest(async () => {
+      const response = await this.client.get<ApiEnvelope<unknown>>(
+        `/customer/stores/${id}`,
+        { params: { latitude: lat, longitude: lng } },
+      );
+      return mapStoreDto(response.data.data as Parameters<typeof mapStoreDto>[0]);
+    });
+  }
 }
 
 export const catalogService = new CatalogService();

@@ -262,6 +262,15 @@ export class CatalogRepository extends BaseRepository {
   }
 
   /**
+   * Fetches a store by its unique ID.
+   */
+  public async findStoreById(id: string): Promise<any> {
+    return this.db.store.findUnique({
+      where: { id },
+    });
+  }
+
+  /**
    * Finds stores including products for home feed.
    */
   public async findTopRatedProducts(limit = 10): Promise<any[]> {

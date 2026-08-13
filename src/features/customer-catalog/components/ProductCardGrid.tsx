@@ -1,15 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Heart, Plus, Minus } from 'lucide-react';
 import { useCustomerStore } from '../store/customer-store';
 import { useCartMutations } from '../../customer-checkout/hooks/useCartMutations';
-import { queryKeys } from '../../../core/network/queryKeys';
+import { useCart } from '../../customer-checkout/hooks/useCart';
 import { formatCurrency, formatWeight } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
 import { cardHover, buttonPress } from '../../../core/theme/animations';
-import type { Product, CartData } from '../../../types';
+import type { Product } from '../../../types';
 
 interface ProductCardGridProps {
   products: Product[];
@@ -17,16 +16,12 @@ interface ProductCardGridProps {
 
 export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { wishlist, toggleWishlist } = useCustomerStore();
   const { addToCart, updateQuantity } = useCartMutations();
+  const { items: cartItems } = useCart();
 
-  // Read cart items from React Query cache (single source of truth)
-  const cartData = queryClient.getQueryData<CartData>(queryKeys.cart());
-  const cartItems = cartData?.items ?? [];
-
-  const handleCardClick = (slug: string) => {
-    navigate(`/c/product/${slug}`);
+  const handleCardClick = (id: string) => {
+    navigate(`/c/product/${id}`);
   };
 
   return (
@@ -35,6 +30,12 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
         const isWishlisted = wishlist.some((item) => item.id === product.id);
         const cartItem = cartItems.find((item) => item.productId === product.id && !item.variantId);
         const quantity = cartItem?.quantity || 0;
+
+        const effectivePrice = product.discountPrice ?? product.price;
+        const showMRP = product.discountPrice !== undefined && product.discountPrice < product.price;
+        const discountPct = showMRP
+          ? Math.round(((product.price - product.discountPrice!) / product.price) * 100)
+          : 0;
 
         return (
           <motion.div
@@ -58,7 +59,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
 
             {/* Product details wrapper */}
             <div
-              onClick={() => handleCardClick(product.sku)}
+              onClick={() => handleCardClick(product.id)}
               className="cursor-pointer space-y-2.5 flex-1 flex flex-col justify-between"
             >
               {/* Product Image */}
@@ -68,7 +69,16 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
                   alt={product.name}
                   loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80';
+                  }}
                 />
+                {discountPct > 0 && (
+                  <span className="absolute top-2 left-2 text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-status-error text-white shadow-subtle font-heading tracking-wide uppercase">
+                    {discountPct}% OFF
+                  </span>
+                )}
                 {product.isOrganic && (
                   <span className="absolute bottom-2 left-2 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-brand-emerald/90 text-white shadow-subtle font-heading tracking-wide">
                     ORGANIC
@@ -89,9 +99,16 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
 
             {/* Purchase actions */}
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border-primary/60">
-              <span className="text-sm font-extrabold text-text-primary font-heading">
-                {formatCurrency(product.price)}
-              </span>
+              <div className="flex flex-col">
+                <span className="text-sm font-extrabold text-text-primary font-heading">
+                  {formatCurrency(effectivePrice)}
+                </span>
+                {showMRP && (
+                  <span className="text-[10px] text-text-secondary line-through font-semibold">
+                    {formatCurrency(product.price)}
+                  </span>
+                )}
+              </div>
 
               {quantity > 0 ? (
                 <div className="flex items-center gap-2 bg-brand-emerald text-white rounded-lg px-2 py-1 shadow-subtle border border-brand-emerald-hover">

@@ -16,6 +16,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
 import { useCartMutations } from '../../customer-checkout/hooks/useCartMutations';
+import { useCart } from '../../customer-checkout/hooks/useCart';
 import { useInfiniteScroll } from '../../../hooks/useInfiniteScroll';
 import { useToast } from '../../../hooks/useToast';
 import { catalogService } from '../services/catalog-service';
@@ -40,10 +41,7 @@ export const ProductListingPage: React.FC = () => {
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const isServiceable = selectedAddress ? selectedAddress.isServiceable !== false : true;
   const { addToCart, updateQuantity } = useCartMutations();
-
-  // Read cart items from React Query cache (single source of truth)
-  const cartData = queryClient.getQueryData<import('../../../types').CartData>(queryKeys.cart());
-  const cartItems = cartData?.items ?? [];
+  const { items: cartItems } = useCart();
 
   // Layout View Switch: 'GRID' or 'LIST'
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');

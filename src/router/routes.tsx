@@ -32,6 +32,7 @@ const ProfileSetupScreen = lazy(() => import('../features/auth/components/Profil
 const HomeScreen = lazy(() => import('../features/customer-catalog/components/HomeScreen'));
 const ProductListingPage = lazy(() => import('../features/customer-catalog/components/ProductListingPage'));
 const ProductDetailPage = lazy(() => import('../features/customer-catalog/components/ProductDetailPage'));
+const StoreDetailsPage = lazy(() => import('../features/customer-catalog/components/StoreDetailsPage'));
 
 const CheckoutPage = lazy(() => import('../features/customer-checkout/components/CheckoutPage'));
 const OrderConfirmationPage = lazy(() => import('../features/customer-checkout/components/OrderConfirmationPage'));
@@ -132,6 +133,10 @@ export const routes: RouteObject[] = [
           {
             path: 'product/:slug',
             element: withSuspense(ProductDetailPage),
+          },
+          {
+            path: 'store/:storeId',
+            element: withSuspense(StoreDetailsPage),
           },
           {
             path: 'checkout',

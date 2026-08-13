@@ -19,6 +19,8 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
 import { useCartMutations } from '../../customer-checkout/hooks/useCartMutations';
+import { useCart } from '../../customer-checkout/hooks/useCart';
+import { useDrawerStore } from '../../../components/ui/drawer-manager/drawer-store';
 import { queryKeys } from '../../../core/network/queryKeys';
 import { useToast } from '../../../hooks/useToast';
 import { catalogService } from '../services/catalog-service';
@@ -33,13 +35,11 @@ export const ProductDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const openDrawer = useDrawerStore((state) => state.openDrawer);
 
   const { addRecentlyViewed, toggleWishlist: storeToggleWishlist } = useCustomerStore();
   const { addToCart, updateQuantity } = useCartMutations();
-
-  // Read cart items from React Query cache (single source of truth)
-  const cartData = queryClient.getQueryData<import('../../../types').CartData>(queryKeys.cart());
-  const cartItems = cartData?.items ?? [];
+  const { items: cartItems } = useCart();
 
   const productId = slug || '';
 
@@ -437,13 +437,22 @@ export const ProductDetailPage: React.FC = () => {
           {/* Desktop Purchase Button */}
           {activeStock > 0 ? (
             quantity > 0 ? (
-              <div className="hidden md:flex items-center justify-between border border-border-primary p-3 rounded-xl bg-bg-tertiary">
-                <span className="text-xs font-bold text-text-secondary">Quantity in cart</span>
-                <div className="flex items-center gap-3 bg-brand-emerald text-white rounded-lg px-3 py-1.5 shadow-subtle">
-                  <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
-                  <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
-                  <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
+              <div className="hidden md:flex items-center gap-3">
+                <div className="flex-1 flex items-center justify-between border border-border-primary p-3 rounded-xl bg-bg-tertiary">
+                  <span className="text-xs font-bold text-text-secondary">Quantity</span>
+                  <div className="flex items-center gap-3 bg-brand-emerald text-white rounded-lg px-3 py-1.5 shadow-subtle">
+                    <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
+                    <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
+                    <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
+                  </div>
                 </div>
+                <button
+                  onClick={() => openDrawer('CART')}
+                  className="py-4 px-6 bg-brand-emerald text-white hover:bg-brand-emerald-hover font-bold text-xs rounded-xl shadow-subtle cursor-pointer flex items-center gap-2 whitespace-nowrap"
+                >
+                  <ShoppingBag className="h-4 w-4" />
+                  Go to Cart
+                </button>
               </div>
             ) : (
               <button
@@ -451,12 +460,12 @@ export const ProductDetailPage: React.FC = () => {
                 className="hidden md:flex w-full py-4 bg-brand-emerald text-white hover:bg-brand-emerald-hover font-semibold text-sm rounded-xl items-center justify-center gap-2 shadow-subtle cursor-pointer transition-all"
               >
                 <ShoppingBag className="h-4.5 w-4.5" />
-                Add to Shopping Cart
+                Add to Cart
               </button>
             )
           ) : (
             <button disabled className="hidden md:block w-full py-4 bg-bg-tertiary text-text-secondary font-bold text-sm rounded-xl cursor-not-allowed">
-              LOCKED / OUT OF STOCK
+              OUT OF STOCK
             </button>
           )}
 
@@ -699,10 +708,18 @@ export const ProductDetailPage: React.FC = () => {
 
         {activeStock > 0 ? (
           quantity > 0 ? (
-            <div className="flex items-center gap-3 bg-brand-emerald text-white rounded-xl px-3 py-2 shadow-subtle">
-              <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
-              <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
-              <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 bg-brand-emerald text-white rounded-xl px-3 py-2 shadow-subtle">
+                <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Minus className="h-4 w-4" /></button>
+                <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
+                <button onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1, variantId: selectedVariant?.id })} className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"><Plus className="h-4 w-4" /></button>
+              </div>
+              <button
+                onClick={() => openDrawer('CART')}
+                className="py-2.5 px-4 bg-brand-emerald text-white font-bold text-xs rounded-xl shadow-subtle cursor-pointer"
+              >
+                Go to Cart
+              </button>
             </div>
           ) : (
             <button

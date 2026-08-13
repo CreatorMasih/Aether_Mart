@@ -186,13 +186,13 @@ export const CartDrawerContent: React.FC = () => {
         <span className="text-5xl">🛒</span>
         <h3 className="text-sm font-extrabold text-text-primary font-heading">Your cart is empty</h3>
         <p className="text-xs text-text-secondary max-w-[220px]">
-          Add fresh items from our storefront to begin checking out.
+          Add something you love from nearby stores.
         </p>
         <button
           onClick={closeDrawer}
-          className="px-4 py-2.5 bg-brand-emerald text-white font-bold text-xs rounded-xl cursor-pointer"
+          className="px-5 py-2.5 bg-brand-emerald text-white font-bold text-xs rounded-xl shadow-subtle cursor-pointer hover:bg-brand-emerald-hover transition-colors"
         >
-          Browse Products
+          Start Shopping
         </button>
       </div>
     );
@@ -553,7 +553,7 @@ export const CartDrawerContent: React.FC = () => {
           onClick={handleCheckoutClick}
           className="py-3.5 px-6 bg-brand-emerald text-white hover:bg-brand-emerald-hover font-semibold text-xs rounded-xl shadow-subtle flex items-center gap-1.5 cursor-pointer"
         >
-          Proceed to Pay
+          Proceed to Checkout
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>

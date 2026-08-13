@@ -55,6 +55,13 @@ beforeAll(async () => {
     },
   });
 
+  await prisma.cartItem.deleteMany({
+    where: { cart: { customerId: customer.id } },
+  });
+  await prisma.cart.deleteMany({
+    where: { customerId: customer.id },
+  });
+
   await prisma.wallet.upsert({
     where: { customerId: customer.id },
     update: { balance: 1000.0 }, // top up for test

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, History, Trash2, X } from 'lucide-react';
+import { Search, Bell, History, Trash2, X, ShoppingBag } from 'lucide-react';
 import { LocationSelector } from './LocationSelector';
 import { useCustomerStore } from '../store/customer-store';
+import { useCart } from '../../customer-checkout/hooks/useCart';
+import { useDrawerStore } from '../../../components/ui/drawer-manager/drawer-store';
 import { cn } from '../../../utils/cn';
 
 interface CustomerHeaderProps {
@@ -16,6 +18,8 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   const [isFocused, setIsFocused] = useState(false);
   const { searchHistory, addSearchQuery, clearSearchHistory } = useCustomerStore();
   const navigate = useNavigate();
+  const openDrawer = useDrawerStore((state) => state.openDrawer);
+  const { itemCount } = useCart();
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +42,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
     <header className="sticky top-0 z-sticky bg-bg-secondary/90 backdrop-blur-md border-b border-border-primary w-full px-4 py-3">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         
-        {/* Top line: Brand + LocationSelector + Notification Bell */}
+        {/* Top line: Brand + LocationSelector + Cart Button + Notification Bell */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <span 
@@ -51,14 +55,32 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
             <LocationSelector />
           </div>
 
-          <button
-            onClick={onNotificationClick}
-            className="p-2 rounded-lg border border-border-primary bg-bg-secondary text-text-secondary hover:text-text-primary transition-all relative cursor-pointer"
-            aria-label="Open notifications center"
-          >
-            <Bell className="h-4.5 w-4.5" />
-            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-status-error" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Cart Drawer Trigger Button */}
+            <button
+              onClick={() => openDrawer('CART')}
+              className="px-3 py-1.5 rounded-xl border border-brand-emerald/30 bg-brand-emerald/10 text-brand-emerald hover:bg-brand-emerald/20 transition-all relative flex items-center gap-1.5 cursor-pointer font-bold text-xs font-heading"
+              aria-label="Open cart drawer"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              <span>Cart</span>
+              {itemCount > 0 && (
+                <span className="h-5 min-w-5 px-1 rounded-full bg-brand-emerald text-white text-[10px] font-extrabold flex items-center justify-center">
+                  {itemCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Bell */}
+            <button
+              onClick={onNotificationClick}
+              className="p-2 rounded-xl border border-border-primary bg-bg-secondary text-text-secondary hover:text-text-primary transition-all relative cursor-pointer"
+              aria-label="Open notifications center"
+            >
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-status-error" />
+            </button>
+          </div>
         </div>
 
         {/* Search bar container */}

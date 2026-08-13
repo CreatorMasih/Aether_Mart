@@ -22,24 +22,22 @@ export const LocationSelector: React.FC = () => {
           <MapPin className="h-4 w-4 shrink-0" />
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-1">
-            <span className="text-xs font-extrabold text-text-primary uppercase tracking-wider truncate max-w-[120px] sm:max-w-[160px]">
+          <p className="text-[10px] font-bold text-text-secondary leading-none">Delivering to</p>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-xs font-extrabold text-text-primary font-heading truncate max-w-[120px] sm:max-w-[160px]">
               {activeAddress.city || 'Mahasamund'}
             </span>
             {isServiceable ? (
-              <span className="text-[9px] font-extrabold px-1 rounded bg-brand-emerald/10 text-brand-emerald">
-                Mahasamund
+              <span className="text-[9px] font-extrabold px-1 rounded bg-brand-emerald/10 text-brand-emerald shrink-0">
+                ACTIVE
               </span>
             ) : (
-              <span className="text-[9px] font-extrabold px-1 rounded bg-status-warning/10 text-status-warning">
-                Soon
+              <span className="text-[9px] font-extrabold px-1 rounded bg-status-warning/10 text-status-warning shrink-0">
+                UNSERVICEABLE
               </span>
             )}
-            <ChevronDown className="h-3 w-3 text-text-secondary group-hover:text-text-primary transition-colors" />
+            <ChevronDown className="h-3 w-3 text-text-secondary group-hover:text-text-primary transition-colors shrink-0" />
           </div>
-          <p className="text-[10px] text-text-secondary truncate max-w-[140px] sm:max-w-[200px]">
-            {activeAddress.streetAddress || 'Station Road, Mahasamund'}
-          </p>
         </div>
       </button>
 

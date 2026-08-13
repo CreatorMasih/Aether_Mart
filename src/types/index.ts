@@ -73,6 +73,7 @@ export interface Product {
   description: string;
   imageUrl: string;
   price: number;
+  discountPrice?: number;
   unit: string;
   weightGrams?: number;
   isOrganic?: boolean;
@@ -98,12 +99,22 @@ export interface Store {
   id: string;
   name: string;
   logoUrl: string;
+  coverImageUrl?: string;
+  category?: string;
   bannerUrl?: string;
   rating: number;
   deliveryTimeMins: number;
   address: string;
   coordinates: GeoCoordinates;
   isOpen: boolean;
+  isPaused?: boolean;
+  isHoliday?: boolean;
+  openingTime?: string;
+  closingTime?: string;
+  deliveryFee?: number;
+  minOrderValue?: number;
+  deliveryRadiusKm?: number;
+  distance?: number;
   commissionRate: number;
 }
 

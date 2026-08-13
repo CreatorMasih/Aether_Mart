@@ -17,6 +17,7 @@ router.get('/products/:id/reviews', catalogController.getProductReviews);
 // ── Search suggestions & feeds ──────────────────────────────────────────────
 router.get('/search/suggestions', catalogController.getSearchSuggestions);
 router.get('/home', optionalAuthenticate, catalogController.getHomeFeed);
+router.get('/stores/:id', optionalAuthenticate, catalogController.getStoreById);
 
 // ── Wishlist (Private) ───────────────────────────────────────────────────────
 router.get('/wishlist', authenticate, catalogController.getWishlist);

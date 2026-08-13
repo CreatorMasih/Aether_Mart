@@ -135,6 +135,22 @@ export class CatalogController {
   };
 
   /**
+   * Returns details of a specific store.
+   */
+  public getStoreById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      const lat = req.query.latitude ? parseFloat(req.query.latitude as string) : undefined;
+      const lng = req.query.longitude ? parseFloat(req.query.longitude as string) : undefined;
+
+      const store = await catalogService.getStoreById(id, lat, lng);
+      sendSuccess(res, store, 'Store details fetched successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
    * Wishlist: get all items.
    */
   public getWishlist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

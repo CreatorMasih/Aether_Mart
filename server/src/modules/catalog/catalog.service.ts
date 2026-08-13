@@ -280,10 +280,19 @@ export class CatalogService {
       nearbyStores: nearbyStores.map((s: any) => ({
         id: s.id,
         name: s.name,
+        address: s.address,
+        category: s.category,
         logoUrl: s.logoUrl,
+        coverImageUrl: s.coverImageUrl,
         rating: s.rating,
         distance: s.distance !== undefined ? parseFloat(s.distance.toFixed(1)) : undefined,
         deliveryTime: s.estimatedDeliveryTime || s.deliveryTimeMins,
+        deliveryFee: s.deliveryFee,
+        minOrderValue: s.minOrderValue,
+        isOpen: s.isOpen,
+        isPaused: s.isPaused,
+        isHoliday: s.isHoliday,
+        available: s.available,
       })),
       wishlistPicks,
       recentViews,
@@ -295,6 +304,46 @@ export class CatalogService {
         value: fd.value,
         imageUrl: fd.product?.images?.[0]?.url || 'https://images.unsplash.com/photo-1542838132-92c53300491e',
       })),
+    };
+  }
+
+  /**
+   * Fetches single store details by ID.
+   */
+  public async getStoreById(storeId: string, lat?: number, lng?: number): Promise<any> {
+    const store = await catalogRepository.findStoreById(storeId);
+    if (!store) throw new NotFoundError('Store');
+
+    let distance: number | undefined;
+    if (lat !== undefined && lng !== undefined) {
+      distance = haversineDistance(
+        { latitude: lat, longitude: lng },
+        { latitude: store.latitude, longitude: store.longitude }
+      );
+    }
+
+    const available = (distance === undefined || distance <= store.deliveryRadiusKm) &&
+      store.isOpen && !store.isPaused && !store.isHoliday;
+
+    return {
+      id: store.id,
+      name: store.name,
+      address: store.address,
+      category: store.category,
+      logoUrl: store.logoUrl,
+      coverImageUrl: store.coverImageUrl,
+      rating: store.rating,
+      deliveryRadiusKm: store.deliveryRadiusKm,
+      deliveryTimeMins: store.deliveryTimeMins,
+      minOrderValue: store.minOrderValue,
+      deliveryFee: store.deliveryFee,
+      openingTime: store.openingTime,
+      closingTime: store.closingTime,
+      isOpen: store.isOpen,
+      isPaused: store.isPaused,
+      isHoliday: store.isHoliday,
+      available,
+      distance: distance !== undefined ? parseFloat(distance.toFixed(1)) : undefined,
     };
   }
 

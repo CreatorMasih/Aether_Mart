@@ -3,6 +3,7 @@ import { queryKeys } from '../../../core/network/queryKeys';
 import { cartService } from '../services/cart-service';
 import { useToast } from '../../../hooks/useToast';
 import { parseApiError } from '../../../core/network/api-error-parser';
+import { useModalStore } from '../../../components/ui/modal-manager/modal-store';
 import type { CartData } from '../../../types';
 
 /**
@@ -83,9 +84,40 @@ export function useCartMutations() {
       return { snapshot };
     },
 
-    onError: (_err, _vars, context) => {
+    onError: (_err, vars, context) => {
       rollback(context?.snapshot);
       const err = parseApiError(_err);
+
+      if (err.code === 'STORE_CONFLICT') {
+        useModalStore.getState().openModal('CONFIRM', {
+          title: 'Your cart contains items from another store',
+          message: 'You can clear your current cart and start a new order from this store.',
+          confirmText: 'Clear Cart & Add',
+          cancelText: 'Keep Current Cart',
+          isDestructive: true,
+          onConfirm: async () => {
+            try {
+              await cartService.clearCart();
+              const newCart = await cartService.addItem(vars.productId, vars.variantId, vars.quantity ?? 1);
+              queryClient.setQueryData(queryKeys.cart(), newCart);
+              showToast({
+                type: 'success',
+                title: 'Cart Replaced',
+                description: 'Cleared previous items and added product from new store.',
+              });
+            } catch (error) {
+              const clearErr = parseApiError(error);
+              showToast({
+                type: 'error',
+                title: 'Cart Reset Failed',
+                description: clearErr.message,
+              });
+            }
+          },
+        });
+        return;
+      }
+
       showToast({
         type: 'error',
         title: cartErrorTitle(err.code),

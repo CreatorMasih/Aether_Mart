@@ -84,7 +84,7 @@ export const DrawerContainer: React.FC = () => {
         return (
           <div className="flex flex-col h-full overflow-hidden">
             <div className="px-6 py-5 border-b border-border-primary flex items-center justify-between">
-              <h3 className="text-lg font-bold text-text-primary">Shopping Cart</h3>
+              <h3 className="text-lg font-bold text-text-primary font-heading">Your Cart</h3>
               <button
                 onClick={closeDrawer}
                 className="p-1 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-all cursor-pointer"
