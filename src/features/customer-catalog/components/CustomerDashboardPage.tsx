@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../auth/store/auth-store';
 import { LogoutConfirmationModal } from '../../../components/ui/LogoutConfirmationModal';
-import { useCustomerStore } from '../store/customer-store';
+import { AddAddressModal } from '../../../components/ui/AddAddressModal';
+import { useCustomerAddresses } from '../../customer-checkout/hooks/useCustomerAddresses';
 import { useTheme } from '../../../core/theme/useTheme';
 import { queryKeys } from '../../../core/network/queryKeys';
 import { orderService } from '../../customer-checkout/services/order-service';
@@ -40,8 +41,8 @@ export const CustomerDashboardPage: React.FC = () => {
   const { showToast } = useToast();
 
   const { theme, setTheme } = useTheme();
-  const { user, clearSession, addSavedAddress } = useAuthStore();
-  const { setSelectedAddress } = useCustomerStore();
+  const { user, clearSession } = useAuthStore();
+  const { addresses: savedAddresses = [] } = useCustomerAddresses();
 
   // Active Tab state synced with search param
   const activeTab = (searchParams.get('tab') as TabType) || 'profile';
@@ -56,12 +57,8 @@ export const CustomerDashboardPage: React.FC = () => {
   const [supportMessage, setSupportMessage] = useState('');
   const [showChatModal, setShowChatModal] = useState(false);
 
-  // Address Modal form states
+  // Address Modal state
   const [showAddAddressModal, setShowAddAddressModal] = useState(false);
-  const [newAddrLabel, setNewAddrLabel] = useState<'Home' | 'Work' | 'Other'>('Home');
-  const [newAddrStreet, setNewAddrStreet] = useState('');
-  const [newAddrZip, setNewAddrZip] = useState('');
-  const [newAddrCity, setNewAddrCity] = useState('');
 
   // TODO: Replace with GET /customer/notifications when backend route is implemented.
   // No backend notification endpoint exists yet. Using static fallback until then.
@@ -103,39 +100,6 @@ export const CustomerDashboardPage: React.FC = () => {
       description: 'Session destroyed. Redirecting to onboarding screens.',
     });
     navigate('/');
-  };
-
-  const handleAddNewAddress = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAddrStreet || !newAddrZip || !newAddrCity) {
-      showToast({
-        type: 'error',
-        title: 'Form Incomplete',
-        description: 'Please fill in street, ZIP code, and city.',
-      });
-      return;
-    }
-    const newAddress = {
-      id: `addr-${Date.now()}`,
-      label: newAddrLabel,
-      receiverName: user?.fullName || 'Customer',
-      receiverPhone: user?.phone || '',
-      streetAddress: newAddrStreet,
-      postalCode: newAddrZip,
-      city: newAddrCity,
-      coordinates: { latitude: 12.9716, longitude: 77.5946 },
-    };
-    addSavedAddress(newAddress);
-    setSelectedAddress(newAddress);
-    setShowAddAddressModal(false);
-    showToast({
-      type: 'success',
-      title: 'Address Registered',
-      description: 'Saved to coordinates list.',
-    });
-    setNewAddrStreet('');
-    setNewAddrZip('');
-    setNewAddrCity('');
   };
 
   // Reorder navigates to home so user can re-add from catalog (no mock cart injection)
@@ -292,7 +256,7 @@ export const CustomerDashboardPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-semibold">
-                  {user?.savedAddresses.map((addr) => (
+                  {savedAddresses.map((addr) => (
                     <div key={addr.id} className="p-4 rounded-xl border border-border-primary bg-bg-tertiary flex justify-between items-start">
                       <div>
                         <span className="font-extrabold text-text-primary">{addr.label}</span>
@@ -628,92 +592,7 @@ export const CustomerDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Address Form Modal */}
-      <AnimatePresence>
-        {showAddAddressModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-overlay flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md p-6 rounded-2xl bg-bg-secondary border border-border-primary shadow-high space-y-4"
-            >
-              <h3 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">Add Address Coordinates</h3>
-              <form onSubmit={handleAddNewAddress} className="space-y-3.5 text-xs font-semibold">
-                
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-text-secondary uppercase">Label</span>
-                  <div className="flex gap-2">
-                    {(['Home', 'Work', 'Other'] as const).map((lbl) => (
-                      <button
-                        key={lbl}
-                        type="button"
-                        onClick={() => setNewAddrLabel(lbl)}
-                        className={cn(
-                          "flex-1 py-2 rounded-lg border text-xs font-bold cursor-pointer transition-all",
-                          newAddrLabel === lbl ? "border-brand-emerald bg-brand-emerald/5 text-brand-emerald" : "border-border-primary bg-bg-tertiary"
-                        )}
-                      >
-                        {lbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                <div className="space-y-1">
-                  <label htmlFor="newAddrStreet" className="text-[10px] font-bold text-text-secondary uppercase">Street Address</label>
-                  <input
-                    id="newAddrStreet"
-                    placeholder="123 Fresh Lane, Sector 4"
-                    value={newAddrStreet}
-                    onChange={(e) => setNewAddrStreet(e.target.value)}
-                    className="w-full px-3 py-2 border border-border-primary rounded-lg bg-bg-tertiary"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label htmlFor="newAddrZip" className="text-[10px] font-bold text-text-secondary uppercase">PIN Code</label>
-                    <input
-                      id="newAddrZip"
-                      placeholder="560034"
-                      value={newAddrZip}
-                      onChange={(e) => setNewAddrZip(e.target.value)}
-                      className="w-full px-3 py-2 border border-border-primary rounded-lg bg-bg-tertiary"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="newAddrCity" className="text-[10px] font-bold text-text-secondary uppercase">City</label>
-                    <input
-                      id="newAddrCity"
-                      placeholder="Bengaluru"
-                      value={newAddrCity}
-                      onChange={(e) => setNewAddrCity(e.target.value)}
-                      className="w-full px-3 py-2 border border-border-primary rounded-lg bg-bg-tertiary"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddAddressModal(false)}
-                    className="flex-1 py-2.5 border border-border-primary rounded-xl text-text-secondary hover:bg-bg-tertiary cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 bg-brand-emerald text-white hover:bg-brand-emerald-hover rounded-xl cursor-pointer"
-                  >
-                    Save Coordinates
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Support Chat Modal */}
       <AnimatePresence>
@@ -775,6 +654,11 @@ export const CustomerDashboardPage: React.FC = () => {
         isOpen={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}
         onConfirm={handleLogoutConfirm}
+      />
+
+      <AddAddressModal
+        isOpen={showAddAddressModal}
+        onClose={() => setShowAddAddressModal(false)}
       />
 
     </motion.div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MapPin, Navigation, Search, X, Loader2, Check, AlertCircle } from 'lucide-react';
 import { useCustomerStore } from '../../features/customer-catalog/store/customer-store';
+import { useCustomerAddresses } from '../../features/customer-checkout/hooks/useCustomerAddresses';
 import { useAuthStore } from '../../features/auth/store/auth-store';
 import { useToast } from '../../hooks/useToast';
 import { apiClient } from '../../core/network/api-client';
@@ -33,7 +34,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
 
   if (!isOpen) return null;
 
-  const savedAddresses: Address[] = user?.savedAddresses || [];
+  const { addresses: savedAddresses = [] } = useCustomerAddresses();
 
   const handleUseGps = () => {
     if (!navigator.geolocation) {
@@ -254,8 +255,8 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
       pincode: addr.postalCode,
       city: addr.city,
       district: addr.district,
-      latitude: addr.coordinates.latitude,
-      longitude: addr.coordinates.longitude,
+      latitude: addr.latitude ?? addr.coordinates?.latitude ?? 21.1085,
+      longitude: addr.longitude ?? addr.coordinates?.longitude ?? 82.0965,
     }).isServiceable;
 
     const newLoc: CustomerLocation = {

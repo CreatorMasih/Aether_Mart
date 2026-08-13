@@ -18,12 +18,12 @@ export class OrderController {
         return;
       }
 
-      const profile = await authRepository.findUserWithProfile(userId);
-      const customerId = profile?.customer?.id;
-      if (!customerId) {
-        sendError(res, 'Customer profile required', HttpStatus.FORBIDDEN, ErrorCodes.FORBIDDEN);
-        return;
+      let profile = await authRepository.findUserWithProfile(userId);
+      if (!profile?.customer) {
+        await authRepository.createCustomerProfile(userId, profile?.fullName || 'Customer', profile?.email || undefined);
+        profile = await authRepository.findUserWithProfile(userId);
       }
+      const customerId = profile.customer!.id;
 
       const parsedBody = placeOrderSchema.parse(req.body);
       const idempotencyKey = req.headers['x-idempotency-key'] as string || undefined;

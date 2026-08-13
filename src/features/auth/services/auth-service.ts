@@ -107,8 +107,8 @@ export class AuthService extends BaseRepository {
           const { coordinates, ...rest } = request.customerDetails.defaultAddress;
           payload.customerDetails.defaultAddress = {
             ...rest,
-            latitude: coordinates.latitude,
-            longitude: coordinates.longitude,
+            latitude: coordinates?.latitude ?? 21.1085,
+            longitude: coordinates?.longitude ?? 82.0965,
           };
         }
       } else if (request.role === 'SHOPKEEPER' && request.merchantDetails) {

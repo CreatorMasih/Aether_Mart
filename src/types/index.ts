@@ -18,11 +18,17 @@ export interface Address {
   receiverPhone: string;
   streetAddress: string;
   apartmentSuite?: string;
+  houseNumber?: string;
+  landmark?: string;
   postalCode: string;
   city: string;
   district?: string;
   state?: string;
-  coordinates: GeoCoordinates;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  coordinates?: GeoCoordinates;
+  isDefault?: boolean;
   isServiceable?: boolean;
 }
 

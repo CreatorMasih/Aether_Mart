@@ -11,6 +11,9 @@ export const queryKeys = {
   recentlyViewed: () => ['recentlyViewed'] as const,
   searchSuggestions: (query: string) => ['searchSuggestions', query] as const,
 
+  // ─── Customer Address query keys ────────────────────────────────────────────
+  customerAddresses: () => ['customer', 'addresses'] as const,
+
   // ─── Cart query keys ────────────────────────────────────────────────────────
   cart: () => ['cart'] as const,
   cartRecalculate: (params: Record<string, unknown>) => ['cart', 'recalculate', params] as const,
