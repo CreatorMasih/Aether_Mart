@@ -58,20 +58,20 @@ export const RiderDashboard: React.FC = () => {
   const { data: earningsData, isLoading: earningsLoading } = useQuery({
     queryKey: queryKeys.riderEarnings(),
     queryFn: () => riderService.getEarnings(),
-    enabled: !!rider?.id,
+    enabled: !!rider?.id && profileMe?.role === 'RIDER',
   });
 
   const { data: availableDeliveries } = useQuery({
     queryKey: queryKeys.riderAvailableJobs(coords.lat, coords.lng),
     queryFn: () => riderService.getAvailableDeliveries(coords.lat, coords.lng),
     refetchInterval: 5000, // Poll available jobs every 5 seconds when online
-    enabled: isOnline && !!rider?.id,
+    enabled: isOnline && !!rider?.id && profileMe?.role === 'RIDER',
   });
 
   const { data: assignmentsData } = useQuery({
     queryKey: queryKeys.riderAssignments(),
     queryFn: () => riderService.getAssignments(),
-    enabled: !!rider?.id,
+    enabled: !!rider?.id && profileMe?.role === 'RIDER',
   });
 
   const assignmentsList = assignmentsData ?? [];
@@ -84,8 +84,12 @@ export const RiderDashboard: React.FC = () => {
 
   // 2. Mutations
   const toggleDutyMutation = useMutation({
-    mutationFn: (nextOnline: boolean) => 
-      riderService.sendHeartbeat(coords.lat, coords.lng, nextOnline),
+    mutationFn: (nextOnline: boolean) => {
+      if (profileMe?.role !== 'RIDER') {
+        throw new Error('Signed in account is not a Rider. Please sign out and sign in with a Rider account.');
+      }
+      return riderService.sendHeartbeat(coords.lat, coords.lng, nextOnline);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.riderAvailableJobs(coords.lat, coords.lng) });

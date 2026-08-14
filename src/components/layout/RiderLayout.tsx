@@ -21,8 +21,25 @@ export const RiderLayout: React.FC = () => {
       title: 'Logged Out',
       description: 'Rider portal session closed.',
     });
-    navigate('/');
+    navigate('/auth');
   };
+
+  if (user && user.role !== 'RIDER') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4 max-w-md mx-auto">
+        <h2 className="text-lg font-bold text-text-primary">Signed in as {user.role}</h2>
+        <p className="text-xs text-text-secondary">
+          You are signed in with a <span className="font-bold text-text-primary">{user.role}</span> account. Please sign out to access the Rider Portal.
+        </p>
+        <button
+          onClick={handleLogoutConfirm}
+          className="px-6 py-2.5 bg-brand-emerald text-white rounded-xl font-bold text-xs cursor-pointer"
+        >
+          Sign Out & Switch to Rider Account
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary max-w-md mx-auto shadow-high border-x border-border-primary">

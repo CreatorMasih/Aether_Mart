@@ -75,6 +75,8 @@ export class RiderService {
       });
     }
 
+    log.info(`[Rider Heartbeat] riderId=${rider.id}, isOnline=${params.isOnline}, lat=${params.latitude}, lng=${params.longitude}`);
+
     const updatedRider = await riderRepository.updateRiderStatus(
       rider.id,
       params.isOnline,
@@ -120,6 +122,7 @@ export class RiderService {
     }
 
     const orders = await riderRepository.findAvailableDeliveries();
+    log.info(`[Rider Deliveries] riderId=${rider.id}, count=${orders.length}`);
 
     // Sort by distance to store if rider coordinates are provided
     if (riderLat !== undefined && riderLng !== undefined) {
@@ -206,6 +209,8 @@ export class RiderService {
 
       return { assignment: updatedAss, order: updatedOrder };
     });
+
+    log.info(`[Rider Accept] riderId=${rider.id}, assignmentId=${updated.assignment.id}, orderId=${orderId}`);
 
     // Emit confirmation event
     orderEventEmitter.emitEvent(OrderEvent.CONFIRMED, { order: updated.order });

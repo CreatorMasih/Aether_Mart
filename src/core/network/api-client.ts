@@ -53,10 +53,26 @@ apiClient.interceptors.response.use(
         );
         
         const newAccessToken = (response.data as any)?.data?.accessToken || (response.data as any)?.accessToken;
-        const user = useAuthStore.getState().user;
+        const currentUser = useAuthStore.getState().user;
         
-        if (newAccessToken && user) {
-          useAuthStore.getState().setSession(user, newAccessToken);
+        if (newAccessToken) {
+          // Fetch fresh user profile from backend to ensure strict role and session alignment
+          try {
+            const meRes = await axios.get(`${API_BASE_URL}/auth/me`, {
+              headers: { Authorization: `Bearer ${newAccessToken}` },
+              withCredentials: true,
+            });
+            const freshUser = meRes.data?.data;
+            if (freshUser) {
+              useAuthStore.getState().setSession(freshUser, newAccessToken);
+            } else if (currentUser) {
+              useAuthStore.getState().setSession(currentUser, newAccessToken);
+            }
+          } catch {
+            if (currentUser) {
+              useAuthStore.getState().setSession(currentUser, newAccessToken);
+            }
+          }
           
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
