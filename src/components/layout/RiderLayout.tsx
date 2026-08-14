@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Navigation, LogOut, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Navigation, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../features/auth/store/auth-store';
 import { useToast } from '../../hooks/useToast';
-import { useTheme } from '../../core/theme/useTheme';
 import { cn } from '../../utils/cn';
 import { LogoutConfirmationModal } from '../ui/LogoutConfirmationModal';
 
@@ -11,7 +10,6 @@ export const RiderLayout: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { user, clearSession } = useAuthStore();
-  const { theme, setTheme } = useTheme();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogoutConfirm = () => {
@@ -56,14 +54,7 @@ export const RiderLayout: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Appearance Toggle */}
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="p-1.5 border border-border-primary rounded-lg text-text-secondary hover:bg-bg-tertiary cursor-pointer transition-all"
-            title="Toggle Appearance"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4 text-brand-emerald" /> : <Moon className="h-4 w-4 text-brand-emerald" />}
-          </button>
+
           
           <button
             onClick={() => setShowLogoutModal(true)}

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Layers, Package, Store, LogOut, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Layers, Package, Store, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../features/auth/store/auth-store';
 import { useToast } from '../../hooks/useToast';
-import { useTheme } from '../../core/theme/useTheme';
 import { cn } from '../../utils/cn';
 import { LogoutConfirmationModal } from '../ui/LogoutConfirmationModal';
 
@@ -11,7 +10,6 @@ export const MerchantLayout: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { user, clearSession } = useAuthStore();
-  const { theme, setTheme } = useTheme();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogoutConfirm = () => {
@@ -78,17 +76,7 @@ export const MerchantLayout: React.FC = () => {
         </div>
 
         <div className="pt-6 border-t border-border-primary/60 mt-4 md:mt-auto space-y-4">
-          {/* Theme Settings Toggle */}
-          <div className="flex items-center justify-between text-xs font-semibold px-1">
-            <span className="text-text-secondary">Appearance</span>
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="p-1.5 border border-border-primary rounded-lg hover:bg-bg-tertiary text-text-primary cursor-pointer transition-all flex items-center gap-1.5"
-            >
-              {theme === 'dark' ? <Sun className="h-3.5 w-3.5 text-brand-emerald" /> : <Moon className="h-3.5 w-3.5 text-brand-emerald" />}
-              <span className="text-[10px]">{theme === 'dark' ? 'Light' : 'Dark'}</span>
-            </button>
-          </div>
+
 
           <button
             onClick={() => setShowLogoutModal(true)}

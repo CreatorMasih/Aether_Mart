@@ -11,7 +11,6 @@ import {
   MapPin, 
   CreditCard, 
   Sun, 
-  Moon, 
   LogOut, 
   ChevronRight, 
   RefreshCw, 
@@ -24,7 +23,6 @@ import { useAuthStore } from '../../auth/store/auth-store';
 import { LogoutConfirmationModal } from '../../../components/ui/LogoutConfirmationModal';
 import { AddAddressModal } from '../../../components/ui/AddAddressModal';
 import { useCustomerAddresses } from '../../customer-checkout/hooks/useCustomerAddresses';
-import { useTheme } from '../../../core/theme/useTheme';
 import { queryKeys } from '../../../core/network/queryKeys';
 import { orderService } from '../../customer-checkout/services/order-service';
 import { formatCurrency } from '../../../utils/formatters';
@@ -40,7 +38,6 @@ export const CustomerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  const { theme, setTheme } = useTheme();
   const { user, clearSession } = useAuthStore();
   const { addresses: savedAddresses = [] } = useCustomerAddresses();
 
@@ -288,28 +285,11 @@ export const CustomerDashboardPage: React.FC = () => {
                 <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">App Preferences</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
                   
-                  {/* Theme toggles */}
+                  {/* Theme indicator */}
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-text-secondary uppercase">Theme Mode</span>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => setTheme('light')}
-                        className={cn(
-                          "flex-1 py-2 border rounded-lg flex items-center justify-center gap-1.5 cursor-pointer",
-                          theme === 'light' ? "border-brand-emerald bg-brand-emerald/5 text-brand-emerald" : "border-border-primary"
-                        )}
-                      >
-                        <Sun className="h-3.5 w-3.5" /> Light
-                      </button>
-                      <button 
-                        onClick={() => setTheme('dark')}
-                        className={cn(
-                          "flex-1 py-2 border rounded-lg flex items-center justify-center gap-1.5 cursor-pointer",
-                          theme === 'dark' ? "border-brand-emerald bg-brand-emerald/5 text-brand-emerald" : "border-border-primary"
-                        )}
-                      >
-                        <Moon className="h-3.5 w-3.5" /> Dark
-                      </button>
+                    <span className="text-[10px] font-bold text-text-secondary uppercase">Theme Appearance</span>
+                    <div className="py-2 px-3 border border-brand-emerald/30 bg-brand-emerald/5 rounded-xl flex items-center gap-2 text-xs font-bold text-brand-emerald">
+                      <Sun className="h-4 w-4" /> Light Mode (Default)
                     </div>
                   </div>
 

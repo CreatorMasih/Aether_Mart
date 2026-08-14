@@ -58,20 +58,20 @@
 }
 
 .dark {
-  --bg-primary: 222 47% 6%;           /* Slate-950 */
-  --bg-secondary: 222 47% 11%;        /* Slate-900 */
-  --bg-tertiary: 217 33% 17%;         /* Slate-800 */
-  --text-primary: 210 40% 98%;        /* Slate-50 */
-  --text-secondary: 215 20% 65%;      /* Slate-400 */
-  --border-primary: 217 33% 17%;      /* Slate-800 */
+  --bg-primary: 210 20% 98%;          /* Slate-50 */
+  --bg-secondary: 0 0% 100%;          /* White */
+  --bg-tertiary: 210 20% 95%;         /* Slate-100/50 */
+  --text-primary: 222 47% 11%;        /* Slate-900 */
+  --text-secondary: 215 16% 47%;      /* Slate-500 */
+  --border-primary: 214 32% 91%;      /* Slate-200 */
   
-  --brand-emerald: 162 84% 45%;
-  --brand-emerald-hover: 162 84% 50%;
+  --brand-emerald: 162 84% 39%;       /* Primary green (#10b981) */
+  --brand-emerald-hover: 162 84% 30%;
   
-  --status-success: 142 76% 45%;
-  --status-warning: 38 92% 55%;
-  --status-error: 0 84% 65%;
-  --status-info: 214 94% 55%;
+  --status-success: 142 76% 36%;
+  --status-warning: 38 92% 50%;
+  --status-error: 0 84% 60%;
+  --status-info: 214 94% 50%;
 }
 
 /* Base resets and defaults */

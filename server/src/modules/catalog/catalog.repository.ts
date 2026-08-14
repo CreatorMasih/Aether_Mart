@@ -31,6 +31,13 @@ export class CatalogRepository extends BaseRepository {
       where: {
         ...params.where,
         deletedAt: null,
+        store: {
+          NOT: {
+            name: {
+              contains: 'Test Store',
+            },
+          },
+        },
       },
       orderBy: params.orderBy,
       skip: params.skip,
@@ -257,7 +264,16 @@ export class CatalogRepository extends BaseRepository {
    */
   public async findStores(activeOnly = true): Promise<any[]> {
     return this.db.store.findMany({
-      where: activeOnly ? { isOpen: true } : {},
+      where: activeOnly
+        ? {
+            isOpen: true,
+            NOT: {
+              name: {
+                contains: 'Test Store',
+              },
+            },
+          }
+        : {},
     });
   }
 

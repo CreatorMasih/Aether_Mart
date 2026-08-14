@@ -198,6 +198,13 @@ export const RealTrackingMap: React.FC<RealTrackingMapProps> = ({
           const distanceKm = parseFloat((route.distance / 1000).toFixed(2));
           const durationMins = Math.ceil(route.duration / 60);
 
+          // If distance exceeds local delivery threshold (>50km), suppress misleading ETA
+          if (distanceKm > 50.0) {
+            console.warn('[RealTrackingMap] Route distance exceeds local threshold:', distanceKm, 'km');
+            setRouteInfo(null);
+            return;
+          }
+
           setRouteInfo({ distanceKm, durationMins });
           if (onRouteCalculated) {
             onRouteCalculated({ distanceKm, durationMins });

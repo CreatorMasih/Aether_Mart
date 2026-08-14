@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../features/auth/store/auth-store';
 import { useToast } from '../../hooks/useToast';
-import { useTheme } from '../../core/theme/useTheme';
 import { cn } from '../../utils/cn';
 import { LogoutConfirmationModal } from '../ui/LogoutConfirmationModal';
 
@@ -11,7 +10,6 @@ export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { user, clearSession } = useAuthStore();
-  const { theme, setTheme } = useTheme();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogoutConfirm = () => {
@@ -68,14 +66,7 @@ export const AdminLayout: React.FC = () => {
             <span className="text-xs font-bold text-text-primary hidden sm:inline">{user?.fullName || 'Super Admin'}</span>
           </div>
 
-          {/* Appearance Toggle */}
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="p-2 border border-border-primary rounded-xl hover:bg-bg-tertiary text-text-primary cursor-pointer transition-all ml-1"
-            title="Toggle Appearance"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4 text-brand-emerald" /> : <Moon className="h-4 w-4 text-brand-emerald" />}
-          </button>
+
 
           <button
             onClick={() => setShowLogoutModal(true)}
