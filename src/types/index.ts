@@ -271,6 +271,7 @@ export interface OrderData {
   customerId: string;
   storeId: string;
   storeName: string;
+  distanceToStoreKm?: number;
   store?: {
     id: string;
     name: string;

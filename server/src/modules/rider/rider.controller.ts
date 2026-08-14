@@ -52,8 +52,10 @@ export class RiderController {
         return;
       }
 
-      const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
-      const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
+      const latRaw = (req.query.lat || req.query.latitude) as string | undefined;
+      const lngRaw = (req.query.lng || req.query.longitude) as string | undefined;
+      const lat = latRaw ? parseFloat(latRaw) : undefined;
+      const lng = lngRaw ? parseFloat(lngRaw) : undefined;
 
       const deliveries = await riderService.findAvailableDeliveries(userId, lat, lng);
       sendSuccess(res, deliveries, 'Available delivery shipments retrieved successfully');

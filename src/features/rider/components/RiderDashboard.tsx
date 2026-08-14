@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Power, 
-  MapPin, 
   Star, 
   Clock, 
   Wallet, 
@@ -299,41 +298,52 @@ export const RiderDashboard: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 {availableJobsList.map((job) => (
-                  <div key={job.id} className="p-4 rounded-xl border border-border-primary bg-bg-secondary space-y-3 shadow-subtle">
+                  <div key={job.id} className="p-4 rounded-2xl border border-border-primary bg-bg-secondary space-y-3 shadow-subtle">
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="text-[8px] font-extrabold px-1.5 py-0.5 bg-bg-tertiary border border-border-primary rounded text-text-primary uppercase">
-                          {job.orderNumber}
+                        <span className="text-[9px] font-extrabold px-2 py-0.5 bg-brand-emerald/10 text-brand-emerald rounded uppercase tracking-wider font-heading">
+                          NEW DELIVERY • #{job.orderNumber}
                         </span>
-                        <h4 className="font-extrabold text-text-primary mt-1">{job.storeName}</h4>
+                        <h4 className="font-extrabold text-text-primary text-sm mt-1">{job.storeName || job.store?.name || 'Aether Store'}</h4>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-extrabold text-brand-emerald font-heading">
+                        <span className="text-base font-extrabold text-brand-emerald font-heading">
                           {formatCurrency(job.deliveryFee + job.driverTip)}
                         </span>
-                        <span className="text-[9px] text-text-secondary block font-semibold mt-0.5">Est. Earnings</span>
+                        <span className="text-[9px] text-text-secondary block font-semibold">Est. Earnings</span>
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 text-[10px] text-text-secondary">
-                      <p className="flex items-center gap-1.5 font-semibold">
-                        <MapPin className="h-4.5 w-4.5 text-text-secondary flex-shrink-0" />
-                        Pickup: {job.deliveryAddress.streetAddress}
-                      </p>
-                      <p className="flex items-center gap-1.5 font-semibold">
-                        <MapPin className="h-4.5 w-4.5 text-text-secondary flex-shrink-0" />
-                        Drop: {job.deliveryAddress.streetAddress}
-                      </p>
+                    <div className="space-y-2 text-xs text-text-secondary bg-bg-tertiary p-3 rounded-xl border border-border-primary/50">
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm">🏪</span>
+                        <div>
+                          <span className="font-bold text-text-primary block text-[11px]">STORE PICKUP</span>
+                          <span className="text-[10px] text-text-secondary">{job.store?.address || job.storeName || 'Store Location'}</span>
+                        </div>
+                      </div>
+                      <div className="border-t border-border-primary/40 pt-1.5 flex items-start gap-2">
+                        <span className="text-sm">🏠</span>
+                        <div>
+                          <span className="font-bold text-text-primary block text-[11px]">CUSTOMER DROP</span>
+                          <span className="text-[10px] text-text-secondary">
+                            {job.deliveryAddress?.receiverName ? `${job.deliveryAddress.receiverName} — ` : ''}
+                            {job.deliveryAddress?.streetAddress || 'Customer Address'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex justify-between items-center pt-2 border-t border-border-primary/60 text-[10px]">
-                      <span className="text-text-secondary font-bold uppercase">5.2 km • 15 mins</span>
+                    <div className="flex justify-between items-center pt-2 border-t border-border-primary/60 text-xs">
+                      <span className="text-text-secondary font-extrabold uppercase text-[10px]">
+                        {job.distanceToStoreKm ? `📍 ${job.distanceToStoreKm} km to store` : '📍 Nearby Pickup'}
+                      </span>
                       <button
                         onClick={() => handleAccept(job.id)}
                         disabled={acceptJobMutation.isPending}
-                        className="py-1.5 px-4 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-lg font-extrabold cursor-pointer disabled:opacity-50"
+                        className="py-2.5 px-5 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-xl font-extrabold cursor-pointer disabled:opacity-50 shadow-emerald text-xs"
                       >
-                        {acceptJobMutation.isPending ? 'Accepting...' : 'Accept Delivery'}
+                        {acceptJobMutation.isPending ? 'Accepting...' : 'ACCEPT DELIVERY'}
                       </button>
                     </div>
                   </div>

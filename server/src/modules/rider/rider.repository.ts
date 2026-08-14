@@ -63,11 +63,15 @@ export class RiderRepository extends BaseRepository {
     return this.db.order.findMany({
       where: {
         status: OrderStatus.READY_FOR_PICKUP,
-        deliveryAssignment: null,
+        OR: [
+          { deliveryAssignment: null },
+          { deliveryAssignment: { status: { in: ['ASSIGNED', 'CANCELLED'] } } },
+        ],
       },
       include: {
         store: true,
         deliveryAddress: true,
+        items: true,
       },
     }) as any;
   }

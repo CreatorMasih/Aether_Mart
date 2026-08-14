@@ -122,28 +122,58 @@ export class RiderService {
     }
 
     const orders = await riderRepository.findAvailableDeliveries();
-    log.info(`[Rider Deliveries] riderId=${rider.id}, count=${orders.length}`);
 
-    // Sort by distance to store if rider coordinates are provided
-    if (riderLat !== undefined && riderLng !== undefined) {
-      const mapped = orders.map((order: any) => {
-        const distance = haversineDistance(
-          { latitude: riderLat, longitude: riderLng },
-          { latitude: order.store.latitude, longitude: order.store.longitude }
-        );
-        return {
-          ...order,
-          distanceToStoreKm: parseFloat(distance.toFixed(2)),
-        };
-      });
+    const validRiderLat = (riderLat !== undefined && !isNaN(riderLat)) ? riderLat : (rider.currentLatitude ?? 21.1085);
+    const validRiderLng = (riderLng !== undefined && !isNaN(riderLng)) ? riderLng : (rider.currentLongitude ?? 82.0965);
 
-      // Filter: Within 15km of current rider location
-      return mapped
-        .filter((o: any) => o.distanceToStoreKm <= 15.0)
-        .sort((a: any, b: any) => a.distanceToStoreKm - b.distanceToStoreKm);
-    }
+    const mapped = orders.map((order: any) => {
+      const storeLat = order.store?.latitude ?? 21.1085;
+      const storeLng = order.store?.longitude ?? 82.0965;
+      const custLat = order.deliveryAddress?.latitude ?? 21.1085;
+      const custLng = order.deliveryAddress?.longitude ?? 82.0965;
 
-    return orders;
+      const distRiderToStore = haversineDistance(
+        { latitude: validRiderLat, longitude: validRiderLng },
+        { latitude: storeLat, longitude: storeLng }
+      );
+
+      const distStoreToCustomer = haversineDistance(
+        { latitude: storeLat, longitude: storeLng },
+        { latitude: custLat, longitude: custLng }
+      );
+
+      return {
+        ...order,
+        store: order.store ? {
+          ...order.store,
+          latitude: storeLat,
+          longitude: storeLng,
+        } : {
+          id: order.storeId,
+          name: order.storeName || 'Aether Store',
+          address: 'Mahasamund Store',
+          latitude: storeLat,
+          longitude: storeLng,
+        },
+        deliveryAddress: order.deliveryAddress ? {
+          ...order.deliveryAddress,
+          latitude: custLat,
+          longitude: custLng,
+        } : {
+          latitude: custLat,
+          longitude: custLng,
+          streetAddress: 'Customer Location',
+        },
+        distanceToStoreKm: isNaN(distRiderToStore) ? 0.5 : parseFloat(distRiderToStore.toFixed(2)),
+        distanceStoreToCustomerKm: isNaN(distStoreToCustomer) ? 1.5 : parseFloat(distStoreToCustomer.toFixed(2)),
+      };
+    });
+
+    log.info(
+      `[Rider Deliveries] riderId=${rider.id}, riderRole=RIDER, riderOnlineStatus=${rider.isOnline}, riderLat=${validRiderLat}, riderLng=${validRiderLng}, count=${mapped.length}`
+    );
+
+    return mapped.sort((a: any, b: any) => a.distanceToStoreKm - b.distanceToStoreKm);
   }
 
   /**
@@ -165,18 +195,35 @@ export class RiderService {
       const order = await riderRepository.prisma.order.findUnique({ where: { id: orderId } });
       if (!order) throw new NotFoundError('Order');
 
+      // Check if an existing unassigned delivery assignment exists for this order
+      const existingUnassigned = await riderRepository.prisma.deliveryAssignment.findFirst({
+        where: { orderId },
+      });
+
       const pickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
       const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-      assignment = await riderRepository.prisma.deliveryAssignment.create({
-        data: {
-          orderId,
-          riderId: rider.id,
-          status: DeliveryStatus.ASSIGNED,
-          pickupOtp,
-          deliveryOtp,
-        },
-      });
+      if (existingUnassigned) {
+        assignment = await riderRepository.prisma.deliveryAssignment.update({
+          where: { id: existingUnassigned.id },
+          data: {
+            riderId: rider.id,
+            status: DeliveryStatus.ASSIGNED,
+            pickupOtp: existingUnassigned.pickupOtp || pickupOtp,
+            deliveryOtp: existingUnassigned.deliveryOtp || deliveryOtp,
+          },
+        });
+      } else {
+        assignment = await riderRepository.prisma.deliveryAssignment.create({
+          data: {
+            orderId,
+            riderId: rider.id,
+            status: DeliveryStatus.ASSIGNED,
+            pickupOtp,
+            deliveryOtp,
+          },
+        });
+      }
     }
 
     if (assignment.status !== DeliveryStatus.ASSIGNED) {

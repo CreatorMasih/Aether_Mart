@@ -269,6 +269,7 @@ export function mapOrderDto(dto: BackendOrderDto | null | undefined): OrderData 
     customerId: dto?.customerId ?? '',
     storeId: dto?.storeId ?? '',
     storeName: dto?.store?.name ?? 'Aether Mart',
+    distanceToStoreKm: rawAny?.distanceToStoreKm,
     store: rawAny?.store ? {
       id: rawAny.store.id || dto?.storeId || '',
       name: rawAny.store.name || 'Aether Store',
