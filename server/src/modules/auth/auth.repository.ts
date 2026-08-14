@@ -93,6 +93,20 @@ export class AuthRepository extends BaseRepository {
   }
 
   /**
+   * Guarantees a customer profile exists for the given user ID and returns the customer.id.
+   */
+  public async ensureCustomerId(userId: string): Promise<string> {
+    const profile = await this.findUserWithProfile(userId);
+    if (profile?.customer?.id) {
+      return profile.customer.id;
+    }
+    const user = profile || (await this.db.user.findUnique({ where: { id: userId } }));
+    const name = user?.email?.split('@')[0] || user?.phone || 'Customer';
+    const customer = await this.createCustomerProfile(userId, name, user?.email || undefined);
+    return customer.id;
+  }
+
+  /**
    * Creates a Merchant profile.
    */
   public async createMerchantProfile(

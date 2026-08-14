@@ -99,8 +99,8 @@ export class CartService {
       await cartRepository.updateCartStore(cart.id, product.storeId);
     }
 
-    // Upsert item
-    await cartRepository.upsertCartItem(cart.id, productId, targetVariantId, quantity);
+    // Upsert item with increment=true for Add to Cart
+    await cartRepository.upsertCartItem(cart.id, productId, targetVariantId, quantity, true);
 
     // Reload and return details
     const updated = await cartRepository.findCartByCustomerId(customerId);

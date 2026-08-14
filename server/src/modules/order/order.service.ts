@@ -47,7 +47,10 @@ export class OrderService {
 
     if (!orderItemsInput || orderItemsInput.length === 0) {
       const cart = await cartRepository.findCartByCustomerId(customerId);
-      if (!cart || cart.items.length === 0) {
+      log.info(
+        `[PlaceOrder Cart Resolution] customerId=${customerId}, cartId=${cart?.id}, storeId=${cart?.storeId}, itemCount=${cart?.items?.length || 0}`
+      );
+      if (!cart || !cart.items || cart.items.length === 0) {
         throw new BadRequestError('Cannot place order. Your cart is empty.', ErrorCodes.CART_EMPTY);
       }
       orderItemsInput = cart.items.map((i: any) => ({

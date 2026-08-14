@@ -10,14 +10,7 @@ export class CartController {
    * Ensures that a Customer profile exists for the given user.
    */
   private async ensureCustomerId(userId: string): Promise<string> {
-    const profile = await authRepository.findUserWithProfile(userId);
-    if (profile?.customer?.id) {
-      return profile.customer.id;
-    }
-    const user = profile || (await prisma.user.findUnique({ where: { id: userId } }));
-    const name = user?.email?.split('@')[0] || user?.phone || 'Customer';
-    const customer = await authRepository.createCustomerProfile(userId, name);
-    return customer.id;
+    return authRepository.ensureCustomerId(userId);
   }
 
   /**

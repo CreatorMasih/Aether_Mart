@@ -18,12 +18,7 @@ export class OrderController {
         return;
       }
 
-      let profile = await authRepository.findUserWithProfile(userId);
-      if (!profile?.customer) {
-        await authRepository.createCustomerProfile(userId, profile?.fullName || 'Customer', profile?.email || undefined);
-        profile = await authRepository.findUserWithProfile(userId);
-      }
-      const customerId = profile.customer!.id;
+      const customerId = await authRepository.ensureCustomerId(userId);
 
       const parsedBody = placeOrderSchema.parse(req.body);
       const idempotencyKey = req.headers['x-idempotency-key'] as string || undefined;
