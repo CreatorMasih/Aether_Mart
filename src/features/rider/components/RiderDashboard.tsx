@@ -25,8 +25,8 @@ export const RiderDashboard: React.FC = () => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'JOBS' | 'EARNINGS' | 'DOCS'>('JOBS');
 
-  // Geolocation states
-  const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 12.9360, lng: 77.6250 });
+  // Geolocation states (Default to Mahasamund platform service area)
+  const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 21.1085, lng: 82.0965 });
 
   // Resolve current coordinates on load
   useEffect(() => {
@@ -36,7 +36,7 @@ export const RiderDashboard: React.FC = () => {
           setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         () => {
-          console.warn('Geolocation blocked or not available. Reverting coordinates to Bangalore default.');
+          console.warn('Geolocation blocked. Defaulting coordinates to Mahasamund.');
         }
       );
     }

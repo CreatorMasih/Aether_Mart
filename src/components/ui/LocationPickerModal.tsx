@@ -31,10 +31,9 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ isOpen
   const { selectedAddress, setSelectedAddress } = useCustomerStore();
   const { user } = useAuthStore();
   const { showToast } = useToast();
+  const { addresses: savedAddresses = [] } = useCustomerAddresses();
 
   if (!isOpen) return null;
-
-  const { addresses: savedAddresses = [] } = useCustomerAddresses();
 
   const handleUseGps = () => {
     if (!navigator.geolocation) {

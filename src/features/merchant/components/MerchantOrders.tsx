@@ -419,9 +419,19 @@ export const MerchantOrders: React.FC = () => {
 
             {/* Packing Checklist */}
             <div className="space-y-2">
-              <span className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
-                Packing Checklist ({checkedItems.length}/{(activeOrder.items || []).length})
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
+                  Packing Checklist ({checkedItems.length}/{(activeOrder.items || []).length})
+                </span>
+                {(activeOrder.items || []).length > 1 && checkedItems.length < (activeOrder.items || []).length && (
+                  <button
+                    onClick={() => setCheckedItems((activeOrder.items || []).map((i: any) => i.productId))}
+                    className="text-[10px] font-bold text-brand-primary hover:underline cursor-pointer"
+                  >
+                    Mark All Packed
+                  </button>
+                )}
+              </div>
 
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {(activeOrder.items || []).map((item: any) => {
@@ -450,23 +460,106 @@ export const MerchantOrders: React.FC = () => {
               </div>
             </div>
 
-            {/* Workflow Action Button */}
+            {/* Workflow Action Button — Desktop & Main Panel */}
             <div className="pt-2 border-t border-border">
+              {activeOrder.status === 'PLACED' && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'CONFIRMED' })}
+                    disabled={updateStatusMutation.isPending}
+                    className="flex-1 py-3 bg-success text-white font-extrabold rounded-xl shadow-md hover:bg-success/90 transition-all text-xs cursor-pointer flex items-center justify-center space-x-1"
+                  >
+                    <span>✓ ACCEPT ORDER</span>
+                  </button>
+                  <button
+                    onClick={() => setRejectOrderTarget(activeOrder)}
+                    className="py-3 px-4 bg-error/10 text-error hover:bg-error/20 font-bold rounded-xl transition-all text-xs cursor-pointer"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
+
               {activeOrder.status === 'CONFIRMED' && (
                 <button
                   onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'PACKING' })}
-                  className="w-full py-2.5 bg-brand-primary text-white font-bold rounded-xl shadow-xs hover:bg-brand-primary/90 transition-all text-xs"
+                  disabled={updateStatusMutation.isPending}
+                  className="w-full py-3 bg-brand-primary text-white font-extrabold rounded-xl shadow-md hover:bg-brand-primary/90 transition-all text-xs cursor-pointer"
                 >
-                  Start Packing Order
+                  START PREPARING
                 </button>
               )}
 
               {activeOrder.status === 'PACKING' && (
                 <button
                   onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'READY_FOR_PICKUP' })}
-                  className="w-full py-2.5 bg-success text-white font-bold rounded-xl shadow-xs hover:bg-success/90 transition-all text-xs"
+                  disabled={updateStatusMutation.isPending}
+                  className="w-full py-3 bg-success text-white font-extrabold rounded-xl shadow-md hover:bg-success/90 transition-all text-xs cursor-pointer"
                 >
-                  Mark Ready for Rider Pickup
+                  ✓ READY FOR PICKUP
+                </button>
+              )}
+
+              {activeOrder.status === 'READY_FOR_PICKUP' && (
+                <div className="p-3 bg-brand-primary/10 border border-brand-primary/20 rounded-xl text-center">
+                  <span className="text-xs font-bold text-brand-primary flex items-center justify-center space-x-1.5">
+                    <span>🛵 Waiting for rider assignment...</span>
+                  </span>
+                </div>
+              )}
+
+              {['ASSIGNED', 'ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(activeOrder.status) && (
+                <div className="p-3 bg-success/10 border border-success/20 rounded-xl text-center">
+                  <span className="text-xs font-bold text-success flex items-center justify-center space-x-1.5">
+                    <span>🛵 Rider has picked up the order — Out for delivery</span>
+                  </span>
+                </div>
+              )}
+
+              {activeOrder.status === 'DELIVERED' && (
+                <div className="p-3 bg-surface-subtle border border-border rounded-xl text-center">
+                  <span className="text-xs font-bold text-text-secondary">✓ Order delivered successfully</span>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Sticky Bottom CTA Container */}
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-surface border-t border-border z-40 shadow-2xl space-y-2">
+              {activeOrder.status === 'PLACED' && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'CONFIRMED' })}
+                    disabled={updateStatusMutation.isPending}
+                    className="flex-1 py-3.5 bg-success text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer"
+                  >
+                    ✓ ACCEPT ORDER
+                  </button>
+                  <button
+                    onClick={() => setRejectOrderTarget(activeOrder)}
+                    className="py-3.5 px-4 bg-error/10 text-error font-bold rounded-xl text-xs cursor-pointer"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
+
+              {activeOrder.status === 'CONFIRMED' && (
+                <button
+                  onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'PACKING' })}
+                  disabled={updateStatusMutation.isPending}
+                  className="w-full py-3.5 bg-brand-primary text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer"
+                >
+                  START PREPARING
+                </button>
+              )}
+
+              {activeOrder.status === 'PACKING' && (
+                <button
+                  onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'READY_FOR_PICKUP' })}
+                  disabled={updateStatusMutation.isPending}
+                  className="w-full py-3.5 bg-success text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer"
+                >
+                  ✓ READY FOR PICKUP
                 </button>
               )}
             </div>

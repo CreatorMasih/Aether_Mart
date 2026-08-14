@@ -148,6 +148,35 @@ export const LiveOrderTrackingPage: React.FC = () => {
   const isPackingDone = ['CONFIRMED', 'PACKING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(status);
   const isOutForDelivery = ['OUT_FOR_DELIVERY', 'DELIVERED'].includes(status);
   const isDelivered = status === 'DELIVERED';
+  const getCustomerStatusHeadline = (): string => {
+    const riderName = riderInfo?.fullName;
+    switch (status as string) {
+      case 'PLACED':
+        return 'Waiting for store confirmation';
+      case 'CONFIRMED':
+        return 'Store accepted your order';
+      case 'PACKING':
+        return 'Store is preparing your order';
+      case 'READY_FOR_PICKUP':
+        return 'Finding a delivery partner';
+      case 'ASSIGNED':
+        return riderName ? `${riderName} is on the way to store` : 'Delivery partner assigned';
+      case 'PICKED_UP':
+      case 'OUT_FOR_DELIVERY':
+        if (riderName) {
+          return routeMetrics
+            ? `${riderName} is on the way (${routeMetrics.distanceKm} km away)`
+            : `${riderName} is on the way with your order`;
+        }
+        return 'Out for delivery';
+      case 'DELIVERED':
+        return '✓ Delivered';
+      case 'CANCELLED':
+        return 'Order Cancelled';
+      default:
+        return `Status: ${status}`;
+    }
+  };
 
   return (
     <motion.div
@@ -169,12 +198,8 @@ export const LiveOrderTrackingPage: React.FC = () => {
           <h1 className="text-base font-extrabold text-text-primary tracking-tight font-heading">
             Track Order #{order.orderNumber}
           </h1>
-          <p className="text-[10px] text-brand-emerald font-bold uppercase tracking-wider mt-0.5">
-            {isDelivered 
-              ? '✓ Order Delivered' 
-              : routeMetrics 
-                ? `Arriving in ~${routeMetrics.durationMins} mins (${routeMetrics.distanceKm} km away)` 
-                : `Status: ${status}`}
+          <p className="text-[11px] text-brand-emerald font-extrabold uppercase tracking-wider mt-0.5">
+            {getCustomerStatusHeadline()}
           </p>
         </div>
       </div>
