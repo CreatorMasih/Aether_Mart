@@ -37,20 +37,30 @@ export function createApp(): Application {
           'https://aether-mart-six.vercel.app',
         ];
 
-        // Allow requests with no origin (e.g. Postman, curl, mobile apps)
+        // Allow requests with no origin (e.g. Postman, curl, mobile native apps)
         if (!origin) return callback(null, true);
 
-        if (allowedOrigins.includes(origin)) {
+        // Match explicit allowed origins or any Aether Mart vercel deployment
+        const isVercelOrigin = origin.endsWith('.vercel.app') && origin.includes('aether-mart');
+        if (allowedOrigins.includes(origin) || isVercelOrigin) {
           return callback(null, true);
         }
 
         logger.warn(`CORS blocked origin: ${origin}`);
-        return callback(new Error(`Origin ${origin} not allowed by CORS`));
+        return callback(null, false);
       },
       credentials: true, // Required for withCredentials (refresh token cookie)
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Idempotency-Key'],
-      exposedHeaders: ['X-Total-Count', 'X-Rate-Limit-Remaining'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'X-Idempotency-Key',
+        'X-Device-Id',
+        'Accept',
+        'Cookie',
+      ],
+      exposedHeaders: ['X-Total-Count', 'X-Rate-Limit-Remaining', 'Set-Cookie'],
     })
   );
 

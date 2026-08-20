@@ -256,14 +256,19 @@ export const RealTrackingMap: React.FC<RealTrackingMapProps> = ({
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
       {/* Floating Route Info Badge */}
-      {routeInfo && (
-        <div className="absolute top-3 left-3 bg-bg-secondary/95 backdrop-blur border border-border-primary px-3 py-1.5 rounded-xl text-xs font-bold text-text-primary shadow-subtle z-[400] flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-brand-emerald animate-ping" />
+      {routeInfo ? (
+        <div className="absolute top-3 left-3 bg-white/95 backdrop-blur border border-emerald-500/40 px-3.5 py-2 rounded-xl text-xs font-extrabold text-emerald-900 shadow-md z-[400] flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
           <span>
             {routeInfo.distanceKm} km • ~{routeInfo.durationMins} min driving
           </span>
         </div>
-      )}
+      ) : (!riderLocation || !riderLocation.lat) ? (
+        <div className="absolute top-3 left-3 bg-white/95 backdrop-blur border border-amber-400 px-3.5 py-2 rounded-xl text-xs font-extrabold text-amber-900 shadow-md z-[400] flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+          <span>Live rider location unavailable</span>
+        </div>
+      ) : null}
     </div>
   );
 };

@@ -107,7 +107,24 @@ export const LiveOrderTrackingPage: React.FC = () => {
   const initialRiderLat = riderInfo?.currentLatitude ?? order.deliveryAssignment?.lastLatitude;
   const initialRiderLng = riderInfo?.currentLongitude ?? order.deliveryAssignment?.lastLongitude;
 
-  const activeRiderLoc = riderLocOverride || (initialRiderLat && initialRiderLng ? { lat: initialRiderLat, lng: initialRiderLng } : null);
+  // Validate rider coordinates: MUST be valid non-zero numbers in local region
+  let rawRiderLoc = riderLocOverride || (initialRiderLat && initialRiderLng ? { lat: initialRiderLat, lng: initialRiderLng } : null);
+
+  // If rider coordinates belong to default Bangalore seed (12.93x) or are invalid, treat as unavailable
+  const isRiderLocationValid = rawRiderLoc && 
+    typeof rawRiderLoc.lat === 'number' && 
+    typeof rawRiderLoc.lng === 'number' &&
+    rawRiderLoc.lat >= 20.0 && rawRiderLoc.lat <= 22.5 &&
+    rawRiderLoc.lng >= 81.0 && rawRiderLoc.lng <= 83.5;
+
+  const activeRiderLoc = isRiderLocationValid ? rawRiderLoc : null;
+
+  // PRINT EXACT COORDINATES FOR AUDIT
+  console.log('[EXACT MAP COORDINATES TRACE]', {
+    STORE: [storeLoc.lat, storeLoc.lng],
+    CUSTOMER: [customerLoc.lat, customerLoc.lng],
+    RIDER: activeRiderLoc ? [activeRiderLoc.lat, activeRiderLoc.lng] : 'GPS_UNAVAILABLE',
+  });
 
   const status = order.status;
 

@@ -27,20 +27,6 @@ export const RiderDashboard: React.FC = () => {
   // Geolocation states (Default to Mahasamund platform service area)
   const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 21.1085, lng: 82.0965 });
 
-  // Resolve current coordinates on load
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        () => {
-          console.warn('Geolocation blocked. Defaulting coordinates to Mahasamund.');
-        }
-      );
-    }
-  }, []);
-
   // 1. Queries
   const { data: profileMe } = useQuery({
     queryKey: ['auth', 'me'],
@@ -53,6 +39,28 @@ export const RiderDashboard: React.FC = () => {
   const rider = profileMe?.profile;
   const isOnline = rider?.isOnline ?? false;
   const shiftActive = isOnline; // Shift status maps to online status
+
+  // Real GPS watch position on load & online shift
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCoords({ lat, lng });
+        if (isOnline) {
+          riderService.sendHeartbeat(lat, lng, true).catch(console.error);
+        }
+      },
+      (err) => {
+        console.warn('[Rider GPS Watch] Location warning:', err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [isOnline]);
 
   const { data: earningsData, isLoading: earningsLoading } = useQuery({
     queryKey: queryKeys.riderEarnings(),
@@ -226,17 +234,17 @@ export const RiderDashboard: React.FC = () => {
       {/* 2. Critical Stats Widgets */}
       <div className="grid grid-cols-3 gap-3">
         <div className="p-3.5 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-20 text-center">
-          <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Earnings</span>
-          <span className="text-base font-extrabold text-text-primary font-heading mt-1">{formatCurrency(todayEarnings)}</span>
+          <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Today's Earnings</span>
+          <span className="text-base font-extrabold text-emerald-700 font-heading mt-1">{formatCurrency(todayEarnings)}</span>
         </div>
         <div className="p-3.5 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-20 text-center">
-          <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Completed</span>
-          <span className="text-base font-extrabold text-text-primary font-heading mt-1">{completedCount}</span>
+          <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Today Completed</span>
+          <span className="text-base font-extrabold text-text-primary font-heading mt-1">{earningsData?.todayCompletedCount ?? completedCount}</span>
         </div>
         <div className="p-3.5 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-20 text-center">
           <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Rating</span>
           <span className="text-base font-extrabold text-text-primary font-heading mt-1 flex items-center justify-center gap-0.5">
-            {rating} <Star className="h-4 w-4 fill-brand-emerald text-brand-emerald" />
+            {rating} <Star className="h-4 w-4 fill-emerald-500 text-emerald-500" />
           </span>
         </div>
       </div>
@@ -245,14 +253,14 @@ export const RiderDashboard: React.FC = () => {
       <div className="flex gap-2">
         <button
           onClick={handleSOS}
-          className="flex-1 py-3.5 bg-status-error hover:bg-status-error/95 text-white font-extrabold rounded-xl cursor-pointer shadow-subtle flex items-center justify-center gap-2 text-xs uppercase"
+          className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-xl cursor-pointer shadow-subtle flex items-center justify-center gap-2 text-xs uppercase"
         >
           <ShieldAlert className="h-4.5 w-4.5" /> EMERGENCY SOS
         </button>
         {activeJob && (
           <button
             onClick={() => navigate('/r/active')}
-            className="flex-1 py-3.5 bg-brand-violet hover:bg-brand-violet-hover text-white font-extrabold rounded-xl cursor-pointer shadow-subtle flex items-center justify-center gap-2 text-xs uppercase"
+            className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl cursor-pointer shadow-subtle flex items-center justify-center gap-2 text-xs uppercase"
           >
             Active Order
           </button>
@@ -272,7 +280,7 @@ export const RiderDashboard: React.FC = () => {
             className={cn(
               "flex-1 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all",
               activeTab === tab.id 
-                ? "bg-brand-emerald text-white shadow-emerald" 
+                ? "bg-emerald-600 text-white shadow-sm" 
                 : "text-text-secondary hover:text-text-primary"
             )}
           >
@@ -301,13 +309,13 @@ export const RiderDashboard: React.FC = () => {
                   <div key={job.id} className="p-4 rounded-2xl border border-border-primary bg-bg-secondary space-y-3 shadow-subtle">
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="text-[9px] font-extrabold px-2 py-0.5 bg-brand-emerald/10 text-brand-emerald rounded uppercase tracking-wider font-heading">
+                        <span className="text-[9px] font-extrabold px-2 py-0.5 bg-emerald-500/10 text-emerald-700 rounded uppercase tracking-wider font-heading">
                           NEW DELIVERY • #{job.orderNumber}
                         </span>
                         <h4 className="font-extrabold text-text-primary text-sm mt-1">{job.storeName || job.store?.name || 'Aether Store'}</h4>
                       </div>
                       <div className="text-right">
-                        <span className="text-base font-extrabold text-brand-emerald font-heading">
+                        <span className="text-base font-extrabold text-emerald-700 font-heading">
                           {formatCurrency(job.deliveryFee + job.driverTip)}
                         </span>
                         <span className="text-[9px] text-text-secondary block font-semibold">Est. Earnings</span>
@@ -341,13 +349,50 @@ export const RiderDashboard: React.FC = () => {
                       <button
                         onClick={() => handleAccept(job.id)}
                         disabled={acceptJobMutation.isPending}
-                        className="py-2.5 px-5 bg-brand-emerald hover:bg-brand-emerald-hover text-white rounded-xl font-extrabold cursor-pointer disabled:opacity-50 shadow-emerald text-xs"
+                        className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold cursor-pointer disabled:opacity-50 text-xs border border-emerald-500 shadow-sm"
                       >
                         {acceptJobMutation.isPending ? 'Accepting...' : 'ACCEPT DELIVERY'}
                       </button>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Persistent Completed Deliveries History List */}
+            {assignmentsList.filter((a) => a.status === 'DELIVERED').length > 0 && (
+              <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-50/40 space-y-3 mt-4">
+                <h4 className="font-extrabold text-emerald-900 text-xs uppercase tracking-wider flex items-center justify-between border-b border-emerald-200 pb-2">
+                  <span>✓ Completed Deliveries History</span>
+                  <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] rounded-full font-bold">
+                    {assignmentsList.filter((a) => a.status === 'DELIVERED').length} Total
+                  </span>
+                </h4>
+
+                <div className="space-y-2">
+                  {assignmentsList
+                    .filter((a) => a.status === 'DELIVERED')
+                    .map((ass) => (
+                      <div key={ass.id} className="p-3 bg-white border border-emerald-200 rounded-xl flex items-center justify-between shadow-xs">
+                        <div>
+                          <span className="font-extrabold text-slate-900 text-xs block">
+                            Order #{ass.order?.orderNumber || ass.orderId.slice(0, 8)}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
+                            {ass.order?.store?.name || 'Aether Store'} • {ass.deliveredAt ? new Date(ass.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Completed'}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-extrabold text-emerald-700 text-xs block">
+                            +{formatCurrency((ass.order?.deliveryFee || 25) + (ass.order?.driverTip || 0))}
+                          </span>
+                          <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block mt-0.5">
+                            ✓ DELIVERED
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
               </div>
             )}
           </div>

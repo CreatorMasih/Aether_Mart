@@ -380,22 +380,27 @@ export class RiderService {
     const rider = await riderRepository.findRiderByUserId(userId);
     if (!rider) throw new NotFoundError('Rider Profile');
 
+    // Calculate start of today in India Standard Time (Asia/Kolkata, UTC+5:30)
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const nowIST = new Date(now.getTime() + istOffsetMs);
+    const startOfTodayIST = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate()) - istOffsetMs);
 
     // Sum today's earnings
     const todayAssignments = await riderRepository.prisma.deliveryAssignment.findMany({
       where: {
         riderId: rider.id,
         status: DeliveryStatus.DELIVERED,
-        deliveredAt: { gte: startOfToday },
+        deliveredAt: { gte: startOfTodayIST },
       },
       include: { order: true },
     });
 
     const todayEarnings = todayAssignments.reduce((acc, ass) => {
-      return acc + ass.order.deliveryFee + (ass.order.driverTip || 0);
+      return acc + (ass.order?.deliveryFee || 25) + (ass.order?.driverTip || 0);
     }, 0);
+
+    const todayCompletedCount = todayAssignments.length;
 
     const completedCount = await riderRepository.prisma.deliveryAssignment.count({
       where: {
@@ -420,6 +425,7 @@ export class RiderService {
     return {
       balance: rider.balance,
       todayEarnings,
+      todayCompletedCount,
       completedCount,
       rating: rider.rating,
       payoutHistory,

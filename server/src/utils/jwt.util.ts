@@ -117,9 +117,9 @@ export function decodeToken(token: string): JwtPayload | null {
 export const refreshTokenCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: (process.env.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax' | 'none',
+  sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'strict' | 'lax' | 'none',
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
-  path: '/api/auth',
+  path: '/',
 };
 
 /**
@@ -128,9 +128,9 @@ export const refreshTokenCookieOptions = {
 export const clearRefreshTokenCookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: (process.env.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax' | 'none',
+  sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'strict' | 'lax' | 'none',
   maxAge: 0,
-  path: '/api/auth',
+  path: '/',
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

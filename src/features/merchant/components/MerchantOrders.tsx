@@ -333,15 +333,15 @@ export const MerchantOrders: React.FC = () => {
 
                   {/* Immediate Action Buttons */}
                   {order.status === 'PLACED' && (
-                    <div className="flex items-center space-x-2 pt-2 border-t border-border">
+                    <div className="flex items-center space-x-2 pt-2 border-t border-slate-200">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           updateStatusMutation.mutate({ id: order.id, status: 'CONFIRMED' });
                         }}
-                        className="flex-1 py-2 bg-success text-white font-bold rounded-xl shadow-xs hover:bg-success/90 transition-all text-xs"
+                        className="flex-1 py-2 px-3 bg-emerald-600 text-white font-extrabold rounded-xl shadow-sm hover:bg-emerald-700 active:bg-emerald-800 transition-all text-xs cursor-pointer flex items-center justify-center gap-1 border border-emerald-500"
                       >
-                        Accept Order
+                        ✓ Accept Order
                       </button>
 
                       <button
@@ -349,7 +349,7 @@ export const MerchantOrders: React.FC = () => {
                           e.stopPropagation();
                           setRejectOrderTarget(order);
                         }}
-                        className="py-2 px-4 bg-error/10 text-error hover:bg-error/20 font-bold rounded-xl transition-all text-xs"
+                        className="py-2 px-3 bg-white text-red-700 hover:bg-red-50 font-bold rounded-xl border-2 border-red-300 transition-all text-xs cursor-pointer"
                       >
                         Reject
                       </button>
@@ -461,19 +461,19 @@ export const MerchantOrders: React.FC = () => {
             </div>
 
             {/* Workflow Action Button — Desktop & Main Panel */}
-            <div className="pt-2 border-t border-border">
+            <div className="pt-3 border-t border-slate-200">
               {activeOrder.status === 'PLACED' && (
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'CONFIRMED' })}
                     disabled={updateStatusMutation.isPending}
-                    className="flex-1 py-3 bg-success text-white font-extrabold rounded-xl shadow-md hover:bg-success/90 transition-all text-xs cursor-pointer flex items-center justify-center space-x-1"
+                    className="flex-1 py-3 px-4 bg-emerald-600 text-white font-extrabold rounded-xl shadow-md hover:bg-emerald-700 active:bg-emerald-800 transition-all text-xs cursor-pointer flex items-center justify-center space-x-1 border border-emerald-500 disabled:opacity-50"
                   >
                     <span>✓ ACCEPT ORDER</span>
                   </button>
                   <button
                     onClick={() => setRejectOrderTarget(activeOrder)}
-                    className="py-3 px-4 bg-error/10 text-error hover:bg-error/20 font-bold rounded-xl transition-all text-xs cursor-pointer"
+                    className="py-3 px-4 bg-white text-red-700 hover:bg-red-50 font-extrabold rounded-xl border-2 border-red-300 transition-all text-xs cursor-pointer"
                   >
                     Reject
                   </button>
@@ -484,7 +484,7 @@ export const MerchantOrders: React.FC = () => {
                 <button
                   onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'PACKING' })}
                   disabled={updateStatusMutation.isPending}
-                  className="w-full py-3 bg-brand-primary text-white font-extrabold rounded-xl shadow-md hover:bg-brand-primary/90 transition-all text-xs cursor-pointer"
+                  className="w-full py-3 px-4 bg-emerald-600 text-white font-extrabold rounded-xl shadow-md hover:bg-emerald-700 active:bg-emerald-800 transition-all text-xs cursor-pointer border border-emerald-500 disabled:opacity-50"
                 >
                   START PREPARING
                 </button>
@@ -494,49 +494,49 @@ export const MerchantOrders: React.FC = () => {
                 <button
                   onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'READY_FOR_PICKUP' })}
                   disabled={updateStatusMutation.isPending}
-                  className="w-full py-3 bg-success text-white font-extrabold rounded-xl shadow-md hover:bg-success/90 transition-all text-xs cursor-pointer"
+                  className="w-full py-3 px-4 bg-emerald-600 text-white font-extrabold rounded-xl shadow-md hover:bg-emerald-700 active:bg-emerald-800 transition-all text-xs cursor-pointer border border-emerald-500 disabled:opacity-50"
                 >
                   ✓ READY FOR PICKUP
                 </button>
               )}
 
               {activeOrder.status === 'READY_FOR_PICKUP' && (
-                <div className="p-3 bg-brand-primary/10 border border-brand-primary/20 rounded-xl text-center">
-                  <span className="text-xs font-bold text-brand-primary flex items-center justify-center space-x-1.5">
-                    <span>🛵 Waiting for rider assignment...</span>
+                <div className="p-3.5 bg-amber-50 border-2 border-amber-300 rounded-xl text-center shadow-xs">
+                  <span className="text-xs font-extrabold text-amber-800 flex items-center justify-center space-x-1.5">
+                    <span>🛵 WAITING FOR RIDER ASSIGNMENT</span>
                   </span>
                 </div>
               )}
 
               {['ASSIGNED', 'ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(activeOrder.status) && (
-                <div className="p-3 bg-success/10 border border-success/20 rounded-xl text-center">
-                  <span className="text-xs font-bold text-success flex items-center justify-center space-x-1.5">
-                    <span>🛵 Rider has picked up the order — Out for delivery</span>
+                <div className="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl text-center shadow-xs">
+                  <span className="text-xs font-extrabold text-emerald-800 flex items-center justify-center space-x-1.5">
+                    <span>🛵 RIDER PICKED UP — OUT FOR DELIVERY</span>
                   </span>
                 </div>
               )}
 
               {activeOrder.status === 'DELIVERED' && (
-                <div className="p-3 bg-surface-subtle border border-border rounded-xl text-center">
-                  <span className="text-xs font-bold text-text-secondary">✓ Order delivered successfully</span>
+                <div className="p-3.5 bg-slate-100 border border-slate-300 rounded-xl text-center">
+                  <span className="text-xs font-bold text-slate-700">✓ Order delivered successfully</span>
                 </div>
               )}
             </div>
 
             {/* Mobile Sticky Bottom CTA Container */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-surface border-t border-border z-40 shadow-2xl space-y-2">
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-40 shadow-2xl space-y-2">
               {activeOrder.status === 'PLACED' && (
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'CONFIRMED' })}
                     disabled={updateStatusMutation.isPending}
-                    className="flex-1 py-3.5 bg-success text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer"
+                    className="flex-1 py-3.5 bg-emerald-600 text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer border border-emerald-500"
                   >
                     ✓ ACCEPT ORDER
                   </button>
                   <button
                     onClick={() => setRejectOrderTarget(activeOrder)}
-                    className="py-3.5 px-4 bg-error/10 text-error font-bold rounded-xl text-xs cursor-pointer"
+                    className="py-3.5 px-4 bg-white text-red-700 font-extrabold rounded-xl border-2 border-red-300 text-xs cursor-pointer"
                   >
                     Reject
                   </button>
@@ -547,7 +547,7 @@ export const MerchantOrders: React.FC = () => {
                 <button
                   onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'PACKING' })}
                   disabled={updateStatusMutation.isPending}
-                  className="w-full py-3.5 bg-brand-primary text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer"
+                  className="w-full py-3.5 bg-emerald-600 text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer border border-emerald-500"
                 >
                   START PREPARING
                 </button>
@@ -557,7 +557,7 @@ export const MerchantOrders: React.FC = () => {
                 <button
                   onClick={() => updateStatusMutation.mutate({ id: activeOrder.id, status: 'READY_FOR_PICKUP' })}
                   disabled={updateStatusMutation.isPending}
-                  className="w-full py-3.5 bg-success text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer"
+                  className="w-full py-3.5 bg-emerald-600 text-white font-extrabold rounded-xl shadow-lg text-sm cursor-pointer border border-emerald-500"
                 >
                   ✓ READY FOR PICKUP
                 </button>
