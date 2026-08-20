@@ -136,6 +136,11 @@ export const OTPVerificationPanel: React.FC<OTPVerificationPanelProps> = ({
         <p className="text-xs text-text-secondary">
           Enter the OTP sent to <span className="font-bold text-text-primary">{identifier}</span>
         </p>
+        {import.meta.env.DEV && (
+          <div className="mt-2 inline-block px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-800 text-[10px] font-bold rounded-lg tracking-wide">
+            ⚡ Test OTP Mode — Development Only (Use code: 123456)
+          </div>
+        )}
       </div>
 
       <div className="py-2">

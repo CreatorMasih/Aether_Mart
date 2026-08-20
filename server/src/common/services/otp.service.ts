@@ -37,7 +37,8 @@ export class OtpService {
     });
 
     // Generate 6-digit OTP
-    const rawOtp = process.env.NODE_ENV === 'test' ? '123456' : generateOtp(6);
+    const isDevOrTest = process.env.NODE_ENV !== 'production';
+    const rawOtp = isDevOrTest ? '123456' : generateOtp(6);
     
     // Hash it before storing for security
     const otpHash = await hashValue(rawOtp);
@@ -56,6 +57,10 @@ export class OtpService {
         isUsed: false,
       },
     });
+
+    if (isDevOrTest) {
+      log.info(`[DevMode] Verification code generated for ${identifier}: ${rawOtp}`);
+    }
 
     // Send OTP
     if (channel === OtpChannel.EMAIL) {
