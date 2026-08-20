@@ -4,12 +4,18 @@ import { sendError, HttpStatus, ErrorCodes } from '../../utils/response.util';
 
 // ─── Rate Limit Response Handler ──────────────────────────────────────────────
 
-const rateLimitHandler = (_req: Request, res: Response): void => {
+const rateLimitHandler = (req: Request, res: Response): void => {
+  const resetTime = (req as any).rateLimit?.resetTime as Date | undefined;
+  const retryAfterSeconds = resetTime ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000)) : 60;
+
+  res.setHeader('Retry-After', String(retryAfterSeconds));
+
   sendError(
     res,
-    'Too many requests. Please try again later.',
+    'Too many requests. Please try again.',
     HttpStatus.TOO_MANY_REQUESTS,
-    ErrorCodes.RATE_LIMIT_EXCEEDED
+    ErrorCodes.RATE_LIMIT_EXCEEDED,
+    { retryAfterSeconds }
   );
 };
 
@@ -39,16 +45,16 @@ export const authRateLimiter = rateLimit({
 });
 
 // ─── OTP Rate Limiter (OTP sending specifically) ─────────────────────────────
-// 3 OTP requests per hour per IP
+// 5 OTP requests per 15 minutes per IP
 
 export const otpRateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: rateLimitHandler,
   skip: () => process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development',
-  message: 'OTP request limit reached. Please try again in 1 hour.',
+  message: 'OTP request limit reached. Please try again in 15 minutes.',
 });
 
 // ─── API Rate Limiter (authenticated endpoints) ───────────────────────────────

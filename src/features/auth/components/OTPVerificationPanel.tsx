@@ -102,11 +102,21 @@ export const OTPVerificationPanel: React.FC<OTPVerificationPanelProps> = ({
         setOtp('');
       }
     } catch (error: any) {
-      showToast({
-        type: 'error',
-        title: 'Resend Failed',
-        description: error.message || 'Unable to resend OTP. Please try again.',
-      });
+      if (error.status === 429 || error.code === 'RATE_LIMIT_EXCEEDED') {
+        const cooldownSec = error.retryAfterSeconds || 60;
+        setTimer(cooldownSec);
+        showToast({
+          type: 'error',
+          title: 'Too Many Requests',
+          description: `Too many OTP requests. Try again in ${cooldownSec} seconds.`,
+        });
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Resend Failed',
+          description: error.message || 'Unable to resend OTP. Please try again.',
+        });
+      }
     } finally {
       setIsResending(false);
     }

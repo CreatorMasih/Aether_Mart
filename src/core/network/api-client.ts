@@ -91,12 +91,18 @@ apiClient.interceptors.response.use(
     }
     
     // Map backend errors to structured frontend errors
-    const errorData: any = error.response?.data;
+    const responseData = error.response?.data as any;
+    const errorData: any = responseData?.error || responseData;
+    const retryAfterHeader = error.response?.headers?.['retry-after'];
+    const parsedHeaderSec = retryAfterHeader ? parseInt(String(retryAfterHeader), 10) : undefined;
+    const retryAfterSeconds = errorData?.details?.retryAfterSeconds || (parsedHeaderSec && !isNaN(parsedHeaderSec) ? parsedHeaderSec : undefined);
+
     const mappedError = {
       message: errorData?.message || 'An unexpected connection error occurred.',
       status: error.response?.status || 500,
-      code: errorData?.code || 'NETWORK_ERROR',
+      code: errorData?.code || (error.response?.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'NETWORK_ERROR'),
       details: errorData?.details || null,
+      retryAfterSeconds: retryAfterSeconds && typeof retryAfterSeconds === 'number' ? retryAfterSeconds : undefined,
     };
     
     return Promise.reject(mappedError);

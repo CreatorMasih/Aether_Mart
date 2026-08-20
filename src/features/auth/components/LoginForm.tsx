@@ -32,10 +32,20 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showDevPrompt, setShowDevPrompt] = useState<boolean>(false);
   const [mockEmail, setMockEmail] = useState<string>('');
+  const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
   
   const { showToast } = useToast();
   const { setSession } = useAuthStore();
   const navigate = useNavigate();
+
+  // Decrement rate limit countdown every second
+  React.useEffect(() => {
+    if (rateLimitCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setRateLimitCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitCooldown]);
 
   const phoneForm = useForm<PhoneInputData>({
     resolver: zodResolver(phoneLoginSchema),
@@ -43,7 +53,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
   });
 
   const handlePhoneSubmit = async (data: PhoneInputData) => {
-    if (isLoading) return; // Prevent duplicate requests
+    if (isLoading || rateLimitCooldown > 0) return; // Prevent duplicate or rate-limited requests
     setIsLoading(true);
     const fullPhone = `${countryCode}${data.phone}`;
     
@@ -63,11 +73,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
         onOtpSent(fullPhone, 'PHONE');
       }
     } catch (error: any) {
-      showToast({
-        type: 'error',
-        title: 'Failed to Send OTP',
-        description: error.message || 'Unable to dispatch OTP. Please try again.',
-      });
+      if (error.status === 429 || error.code === 'RATE_LIMIT_EXCEEDED') {
+        const cooldownSec = error.retryAfterSeconds || 60;
+        setRateLimitCooldown(cooldownSec);
+        showToast({
+          type: 'error',
+          title: 'Too Many Requests',
+          description: `Too many OTP requests. Try again in ${cooldownSec} seconds.`,
+        });
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Failed to Send OTP',
+          description: error.message || 'Unable to dispatch OTP. Please try again.',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -233,11 +253,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || rateLimitCooldown > 0}
           className="w-full py-3.5 rounded-xl bg-brand-emerald text-white hover:bg-brand-emerald-hover font-bold text-sm transition-all focus:ring-2 focus:ring-brand-emerald focus:ring-offset-2 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-subtle"
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : rateLimitCooldown > 0 ? (
+            <span>Try again in {rateLimitCooldown}s</span>
           ) : (
             <>
               Continue
