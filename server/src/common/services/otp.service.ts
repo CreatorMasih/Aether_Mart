@@ -61,11 +61,19 @@ export class OtpService {
     if (channel === OtpChannel.EMAIL) {
       return emailService.sendOtpEmail(identifier, rawOtp, OTP_EXPIRY_MINUTES);
     } else {
-      // In mobile OTP flow, we fall back to smsService which is abstract-ready
       if (process.env.SMS_OTP_ENABLED !== 'true') {
-        log.warn(`SMS OTP requested but SMS_OTP_ENABLED is false. Mock delivery: code is ${rawOtp}`);
+        log.warn(`SMS OTP requested but SMS_OTP_ENABLED is false.`);
       }
-      return smsService.sendOtp(identifier, rawOtp);
+      const smsResult = await smsService.sendOtp(identifier, rawOtp);
+      if (!smsResult.success) {
+        throw new AppError(
+          smsResult.error || 'SMS delivery failed via provider',
+          HttpStatus.SERVICE_UNAVAILABLE,
+          ErrorCodes.INTERNAL_ERROR,
+          { provider: smsResult.provider }
+        );
+      }
+      return true;
     }
   }
 

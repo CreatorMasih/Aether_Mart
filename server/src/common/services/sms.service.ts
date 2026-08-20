@@ -7,9 +7,16 @@ export interface SmsSendOptions {
   message: string;
 }
 
+export interface SmsResult {
+  success: boolean;
+  provider: string;
+  response?: any;
+  error?: string;
+}
+
 export interface ISmsProvider {
-  sendSms(options: SmsSendOptions): Promise<boolean>;
-  sendOtp(to: string, otp: string): Promise<boolean>;
+  sendSms(options: SmsSendOptions): Promise<SmsResult>;
+  sendOtp(to: string, otp: string): Promise<SmsResult>;
 }
 
 // ─── Twilio Provider ──────────────────────────────────────────────────────────
@@ -32,26 +39,43 @@ class TwilioProvider implements ISmsProvider {
     }
   }
 
-  async sendSms(options: SmsSendOptions): Promise<boolean> {
+  async sendSms(options: SmsSendOptions): Promise<SmsResult> {
     if (!this.client) {
-      log.warn('Twilio client is not initialized');
-      return false;
+      const msg = 'Twilio client is not initialized. Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN in Render.';
+      log.warn(msg);
+      return { success: false, provider: 'twilio', error: msg };
+    }
+    const from = process.env.TWILIO_PHONE_NUMBER;
+    if (!from) {
+      const msg = 'TWILIO_PHONE_NUMBER environment variable is missing in Render.';
+      log.warn(msg);
+      return { success: false, provider: 'twilio', error: msg };
     }
     try {
       const res = await this.client.messages.create({
         body: options.message,
-        from: process.env.TWILIO_PHONE_NUMBER,
+        from,
         to: options.to,
       });
-      log.info(`[Twilio SMS Sent] SID: ${res.sid} to ${options.to}`);
-      return true;
-    } catch (error) {
-      log.error('Twilio SMS send failed', { error });
-      return false;
+      log.info(`[Twilio SMS Sent] SID: ${res.sid}, Status: ${res.status} to ${options.to}`);
+      const isOk = res.status !== 'failed' && res.status !== 'undelivered';
+      return {
+        success: isOk,
+        provider: 'twilio',
+        response: { sid: res.sid, status: res.status, errorCode: res.errorCode, errorMessage: res.errorMessage },
+        error: isOk ? undefined : (res.errorMessage || `Twilio status: ${res.status}`),
+      };
+    } catch (error: any) {
+      log.error('Twilio SMS send failed', { error: error.message || error });
+      return {
+        success: false,
+        provider: 'twilio',
+        error: error.message || 'Twilio API call failed',
+      };
     }
   }
 
-  async sendOtp(to: string, otp: string): Promise<boolean> {
+  async sendOtp(to: string, otp: string): Promise<SmsResult> {
     return this.sendSms({
       to,
       message: `${otp} is your Aether Mart login verification code. Valid for 5 minutes.`,
@@ -75,10 +99,11 @@ class Msg91Provider implements ISmsProvider {
     }
   }
 
-  async sendSms(options: SmsSendOptions): Promise<boolean> {
+  async sendSms(options: SmsSendOptions): Promise<SmsResult> {
     if (!this.apiKey) {
-      log.warn('MSG91 API key is not configured');
-      return false;
+      const msg = 'MSG91_API_KEY environment variable is missing in Render.';
+      log.warn(msg);
+      return { success: false, provider: 'msg91', error: msg };
     }
     try {
       const mobile = options.to.replace(/^\+/, '');
@@ -92,8 +117,14 @@ class Msg91Provider implements ISmsProvider {
           body: JSON.stringify({ Param1: options.message }),
         });
         const data: any = await response.json();
-        log.info(`[MSG91 SMS Sent] Status: ${data?.type || 'success'}`);
-        return data?.type === 'success' || response.ok;
+        log.info(`[MSG91 OTP Sent] Status: ${data?.type || 'unknown'}, Message: ${data?.message || JSON.stringify(data)}`);
+        const isOk = data?.type === 'success' || response.ok;
+        return {
+          success: isOk,
+          provider: 'msg91',
+          response: data,
+          error: isOk ? undefined : (data?.message || 'MSG91 API rejected OTP request'),
+        };
       } else {
         const response = await fetch('https://api.msg91.com/api/v2/sendsms', {
           method: 'POST',
@@ -109,16 +140,26 @@ class Msg91Provider implements ISmsProvider {
           }),
         });
         const data: any = await response.json();
-        log.info(`[MSG91 SMS Sent] Response: ${data?.type || 'success'}`);
-        return data?.type === 'success' || response.ok;
+        log.info(`[MSG91 SMS Sent] Response: ${data?.type || 'unknown'}, Message: ${data?.message || JSON.stringify(data)}`);
+        const isOk = data?.type === 'success' || response.ok;
+        return {
+          success: isOk,
+          provider: 'msg91',
+          response: data,
+          error: isOk ? undefined : (data?.message || 'MSG91 API rejected SMS request'),
+        };
       }
-    } catch (error) {
-      log.error('MSG91 SMS send failed', { error });
-      return false;
+    } catch (error: any) {
+      log.error('MSG91 SMS send failed', { error: error.message || error });
+      return {
+        success: false,
+        provider: 'msg91',
+        error: error.message || 'MSG91 API network request failed',
+      };
     }
   }
 
-  async sendOtp(to: string, otp: string): Promise<boolean> {
+  async sendOtp(to: string, otp: string): Promise<SmsResult> {
     return this.sendSms({
       to,
       message: `${otp} is your Aether Mart verification code. Valid for 5 minutes.`,
@@ -129,14 +170,40 @@ class Msg91Provider implements ISmsProvider {
 // ─── Disabled Provider (Fallback) ─────────────────────────────────────────────
 
 class DisabledProvider implements ISmsProvider {
-  async sendSms(options: SmsSendOptions): Promise<boolean> {
+  async sendSms(options: SmsSendOptions): Promise<SmsResult> {
+    const providerEnv = (process.env.SMS_PROVIDER || 'not_set').toLowerCase();
+    const isProd = process.env.NODE_ENV === 'production';
+    
+    if (isProd) {
+      const missingVars: string[] = [];
+      if (providerEnv === 'twilio') {
+        if (!process.env.TWILIO_ACCOUNT_SID) missingVars.push('TWILIO_ACCOUNT_SID');
+        if (!process.env.TWILIO_AUTH_TOKEN) missingVars.push('TWILIO_AUTH_TOKEN');
+        if (!process.env.TWILIO_PHONE_NUMBER) missingVars.push('TWILIO_PHONE_NUMBER');
+      } else if (providerEnv === 'msg91') {
+        if (!process.env.MSG91_API_KEY) missingVars.push('MSG91_API_KEY');
+      } else {
+        missingVars.push('SMS_PROVIDER (must be set to twilio or msg91)');
+      }
+      
+      const errMsg = `SMS provider is not configured in Render. Missing Render environment variable(s): ${missingVars.join(', ')}`;
+      log.warn(`[SMS Provider Unconfigured] ${errMsg}`);
+      return {
+        success: false,
+        provider: 'disabled',
+        error: errMsg,
+      };
+    }
+
     log.info(`[SMS Provider Disabled] Mock SMS trigger to ${options.to}`);
-    return true;
+    return { success: true, provider: 'disabled' };
   }
 
-  async sendOtp(to: string, otp: string): Promise<boolean> {
-    log.info(`[SMS OTP Provider Disabled] Code triggered for ${to}`);
-    return true;
+  async sendOtp(to: string, otp: string): Promise<SmsResult> {
+    return this.sendSms({
+      to,
+      message: `${otp} is your Aether Mart verification code. Valid for 5 minutes.`,
+    });
   }
 }
 
@@ -154,7 +221,7 @@ class SmsService implements ISmsProvider {
       this.provider = new Msg91Provider();
     } else {
       if (process.env.NODE_ENV === 'production' && process.env.SMS_OTP_ENABLED === 'true') {
-        log.warn('SMS_OTP_ENABLED is true in production but valid SMS_PROVIDER credentials (TWILIO / MSG91) are not present. Operating in mock mode.');
+        log.warn('SMS_OTP_ENABLED is true in production but valid SMS_PROVIDER credentials (TWILIO / MSG91) are missing in Render. Operating in unconfigured mode.');
       } else {
         log.info('SMS OTP provider is set to disabled (mock mode).');
       }
@@ -162,11 +229,11 @@ class SmsService implements ISmsProvider {
     }
   }
 
-  async sendSms(options: SmsSendOptions): Promise<boolean> {
+  async sendSms(options: SmsSendOptions): Promise<SmsResult> {
     return this.provider.sendSms(options);
   }
 
-  async sendOtp(to: string, otp: string): Promise<boolean> {
+  async sendOtp(to: string, otp: string): Promise<SmsResult> {
     return this.provider.sendOtp(to, otp);
   }
 }
