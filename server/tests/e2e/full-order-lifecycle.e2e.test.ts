@@ -44,13 +44,23 @@ describe('⚡ PRODUCTION MVP — Full End-to-End Order Lifecycle (Customer → M
     await prisma.cartItem.deleteMany();
     await prisma.cart.deleteMany();
 
+    // Clean up e2e test users to avoid phone collisions
+    await prisma.user.deleteMany({
+      where: {
+        OR: [
+          { email: { in: [customerEmail, merchantEmail, riderEmail] } },
+          { phone: { in: ['+919999111001', '+919999111002', '+919999111003'] } },
+        ],
+      },
+    });
+
     // 2. Setup Real Merchant & Store in Mahasamund
     const merchantUser = await prisma.user.upsert({
       where: { email: merchantEmail },
       update: { role: 'SHOPKEEPER', isVerified: true },
       create: {
         email: merchantEmail,
-        phone: '+919876543210',
+        phone: '+919999111001',
         role: 'SHOPKEEPER',
         isVerified: true,
       },
@@ -161,7 +171,7 @@ describe('⚡ PRODUCTION MVP — Full End-to-End Order Lifecycle (Customer → M
       update: { role: 'CUSTOMER', isVerified: true },
       create: {
         email: customerEmail,
-        phone: '+919876543211',
+        phone: '+919999111002',
         role: 'CUSTOMER',
         isVerified: true,
       },
@@ -189,7 +199,7 @@ describe('⚡ PRODUCTION MVP — Full End-to-End Order Lifecycle (Customer → M
         userId: customerUser.id,
         label: 'Home',
         receiverName: 'Mahasamund Customer',
-        receiverPhone: '+919876543211',
+        receiverPhone: '+919999111002',
         streetAddress: 'Main Market Road, Mahasamund',
         postalCode: '493445',
         city: 'Mahasamund',
@@ -205,7 +215,7 @@ describe('⚡ PRODUCTION MVP — Full End-to-End Order Lifecycle (Customer → M
       update: { role: 'RIDER', isVerified: true },
       create: {
         email: riderEmail,
-        phone: '+919876543212',
+        phone: '+919999111003',
         role: 'RIDER',
         isVerified: true,
       },

@@ -50,11 +50,11 @@ async function main() {
   // 1. Users
   console.log('👤 Seeding Users...');
   
-  // Admin
+  // Admin (UAT Test Account)
   const adminUser = await prisma.user.create({
     data: {
       phone: '+919999999999',
-      email: 'admin@aethermart.com',
+      email: '123pratikkumar@gmail.com',
       passwordHash,
       role: UserRole.ADMIN,
       isVerified: true,

@@ -29,14 +29,29 @@ interface LoginFormProps {
 
 export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
   const [countryCode, setCountryCode] = useState<string>('+91');
+  const [emailInput, setEmailInput] = useState<string>(role === 'ADMIN' ? '123pratikkumar@gmail.com' : '');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showDevPrompt, setShowDevPrompt] = useState<boolean>(false);
   const [mockEmail, setMockEmail] = useState<string>('');
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
-  
+  const [otpMode, setOtpMode] = useState<'dev' | 'production'>('production');
+
   const { showToast } = useToast();
   const { setSession } = useAuthStore();
   const navigate = useNavigate();
+
+  // Fetch server OTP mode config
+  React.useEffect(() => {
+    let isMounted = true;
+    authService.getAuthConfig()
+      .then((config) => {
+        if (isMounted && config?.otpMode) {
+          setOtpMode(config.otpMode);
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
 
   // Decrement rate limit countdown every second
   React.useEffect(() => {
@@ -52,15 +67,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
     defaultValues: { phone: '' },
   });
 
-  const handlePhoneSubmit = async (data: PhoneInputData) => {
-    if (isLoading || rateLimitCooldown > 0) return; // Prevent duplicate or rate-limited requests
+  const handleIdentifierSubmit = async (identifier: string, isEmail: boolean) => {
+    if (isLoading || rateLimitCooldown > 0) return;
     setIsLoading(true);
-    const fullPhone = `${countryCode}${data.phone}`;
-    
+
     try {
       const success = await authService.sendOtp({
-        identifier: fullPhone,
-        type: 'SMS',
+        identifier,
+        type: isEmail ? 'EMAIL' : 'SMS',
         role,
       });
 
@@ -68,9 +82,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
         showToast({
           type: 'success',
           title: 'OTP Sent Successfully',
-          description: `A 6-digit code has been sent to ${fullPhone}`,
+          description: `A 6-digit code has been sent to ${identifier}`,
         });
-        onOtpSent(fullPhone, 'PHONE');
+        onOtpSent(identifier, isEmail ? 'EMAIL' : 'PHONE');
       }
     } catch (error: any) {
       if (error.status === 429 || error.code === 'RATE_LIMIT_EXCEEDED') {
@@ -93,13 +107,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
     }
   };
 
+  const handlePhoneSubmit = async (data: PhoneInputData) => {
+    const fullPhone = `${countryCode}${data.phone}`;
+    await handleIdentifierSubmit(fullPhone, false);
+  };
+
+  const handleAdminEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput.includes('@')) {
+      showToast({ type: 'error', title: 'Invalid Email', description: 'Please enter a valid Admin email address.' });
+      return;
+    }
+    await handleIdentifierSubmit(emailInput.trim(), true);
+  };
+
   const handleGoogleClick = () => {
-    const isProd = import.meta.env.MODE === 'production';
-    if (!isProd) {
+    if (otpMode === 'dev') {
       setShowDevPrompt(true);
       if (role === 'CUSTOMER') setMockEmail('customer1@gmail.com');
       else if (role === 'SHOPKEEPER') setMockEmail('merchant1@aethermart.com');
       else if (role === 'RIDER') setMockEmail('rider1@aethermart.com');
+      else if (role === 'ADMIN') setMockEmail('123pratikkumar@gmail.com');
     } else {
       // In production, trigger Google OAuth dialog
       const googleObj = (window as any).google;
@@ -217,57 +245,150 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
     <div className="w-full max-w-sm mx-auto space-y-6">
       {/* Title */}
       <div className="text-center space-y-1">
-        <h2 className="text-xl font-extrabold text-text-primary">Enter your mobile number</h2>
-        <p className="text-xs text-text-secondary">We will send a 6-digit verification code</p>
+        <h2 className="text-xl font-extrabold text-text-primary">
+          {role === 'ADMIN' ? 'Admin Verification Login' : 'Enter your mobile number'}
+        </h2>
+        <p className="text-xs text-text-secondary">
+          {role === 'ADMIN'
+            ? 'We will send a 6-digit verification code to your Admin email'
+            : 'We will send a 6-digit verification code to your mobile'}
+        </p>
       </div>
 
-      {/* Primary Mobile OTP Form */}
-      <form onSubmit={phoneForm.handleSubmit(handlePhoneSubmit)} className="space-y-4" noValidate>
-        <div className="space-y-1.5">
-          <div className="flex items-start">
-            <CountryCodeSelector value={countryCode} onChange={setCountryCode} disabled={isLoading} />
-            <div className="flex-1 relative">
-              <input
-                id="phone"
-                type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={10}
-                placeholder="Mobile Number"
-                disabled={isLoading}
-                {...phoneForm.register('phone')}
-                className={cn(
-                  "w-full px-4 py-3 border-y border-r border-border-primary rounded-r-xl text-sm font-semibold bg-bg-secondary text-text-primary transition-all",
-                  "focus:outline-none focus:ring-2 focus:ring-brand-emerald/20 focus:border-brand-emerald",
-                  phoneForm.formState.errors.phone && "border-status-error focus:ring-status-error/10 focus:border-status-error"
-                )}
-              />
-            </div>
+      {/* UAT Quick Persona Selector (Only visible in OTP_MODE=dev) */}
+      {otpMode === 'dev' && (
+        <div className="p-3 border border-amber-500/30 rounded-xl bg-amber-500/10 text-left space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
+              ⚡ UAT Test Persona (OTP: 123456)
+            </span>
           </div>
-          {phoneForm.formState.errors.phone && (
-            <p className="text-xs text-status-error font-medium" role="alert">
-              {phoneForm.formState.errors.phone.message}
-            </p>
-          )}
+          <div className="text-xs font-semibold text-amber-900">
+            {role === 'ADMIN' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailInput('123pratikkumar@gmail.com');
+                  handleIdentifierSubmit('123pratikkumar@gmail.com', true);
+                }}
+                className="w-full py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 font-bold rounded text-left transition-colors flex items-center justify-between"
+              >
+                <span>👑 Admin: 123pratikkumar@gmail.com</span>
+                <span className="text-[10px] underline">Auto-fill & Send</span>
+              </button>
+            )}
+            {role === 'CUSTOMER' && (
+              <button
+                type="button"
+                onClick={() => {
+                  phoneForm.setValue('phone', '9876543210');
+                  handleIdentifierSubmit('+919876543210', false);
+                }}
+                className="w-full py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 font-bold rounded text-left transition-colors flex items-center justify-between"
+              >
+                <span>🛍️ Customer: +91 98765 43210</span>
+                <span className="text-[10px] underline">Auto-fill & Send</span>
+              </button>
+            )}
+            {role === 'SHOPKEEPER' && (
+              <button
+                type="button"
+                onClick={() => {
+                  phoneForm.setValue('phone', '8888888881');
+                  handleIdentifierSubmit('+918888888881', false);
+                }}
+                className="w-full py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 font-bold rounded text-left transition-colors flex items-center justify-between"
+              >
+                <span>🏪 Shopkeeper: +91 88888 88881</span>
+                <span className="text-[10px] underline">Auto-fill & Send</span>
+              </button>
+            )}
+            {role === 'RIDER' && (
+              <button
+                type="button"
+                onClick={() => {
+                  phoneForm.setValue('phone', '7777777771');
+                  handleIdentifierSubmit('+917777777771', false);
+                }}
+                className="w-full py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 font-bold rounded text-left transition-colors flex items-center justify-between"
+              >
+                <span>🛵 Rider: +91 77777 77771</span>
+                <span className="text-[10px] underline">Auto-fill & Send</span>
+              </button>
+            )}
+          </div>
         </div>
+      )}
 
-        <button
-          type="submit"
-          disabled={isLoading || rateLimitCooldown > 0}
-          className="w-full py-3.5 rounded-xl bg-brand-emerald text-white hover:bg-brand-emerald-hover font-bold text-sm transition-all focus:ring-2 focus:ring-brand-emerald focus:ring-offset-2 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-subtle"
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : rateLimitCooldown > 0 ? (
-            <span>Try again in {rateLimitCooldown}s</span>
-          ) : (
-            <>
-              Continue
-              <ArrowRight className="h-4 w-4" />
-            </>
-          )}
-        </button>
-      </form>
+      {/* Admin Email or Mobile Form */}
+      {role === 'ADMIN' ? (
+        <form onSubmit={handleAdminEmailSubmit} className="space-y-4" noValidate>
+          <div className="space-y-1.5">
+            <input
+              type="email"
+              placeholder="Admin Email Address"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              disabled={isLoading}
+              className="w-full px-4 py-3 border border-border-primary rounded-xl text-sm font-semibold bg-bg-secondary text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-emerald/20 focus:border-brand-emerald"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isLoading || rateLimitCooldown > 0}
+            className="w-full py-3.5 rounded-xl bg-brand-emerald text-white hover:bg-brand-emerald-hover font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 shadow-subtle"
+          >
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Send Admin OTP <ArrowRight className="h-4 w-4" /></>}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={phoneForm.handleSubmit(handlePhoneSubmit)} className="space-y-4" noValidate>
+          <div className="space-y-1.5">
+            <div className="flex items-start">
+              <CountryCodeSelector value={countryCode} onChange={setCountryCode} disabled={isLoading} />
+              <div className="flex-1 relative">
+                <input
+                  id="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={10}
+                  placeholder="Mobile Number"
+                  disabled={isLoading}
+                  {...phoneForm.register('phone')}
+                  className={cn(
+                    "w-full px-4 py-3 border-y border-r border-border-primary rounded-r-xl text-sm font-semibold bg-bg-secondary text-text-primary transition-all",
+                    "focus:outline-none focus:ring-2 focus:ring-brand-emerald/20 focus:border-brand-emerald",
+                    phoneForm.formState.errors.phone && "border-status-error focus:ring-status-error/10 focus:border-status-error"
+                  )}
+                />
+              </div>
+            </div>
+            {phoneForm.formState.errors.phone && (
+              <p className="text-xs text-status-error font-medium" role="alert">
+                {phoneForm.formState.errors.phone.message}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading || rateLimitCooldown > 0}
+            className="w-full py-3.5 rounded-xl bg-brand-emerald text-white hover:bg-brand-emerald-hover font-bold text-sm transition-all focus:ring-2 focus:ring-brand-emerald focus:ring-offset-2 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-subtle"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : rateLimitCooldown > 0 ? (
+              <span>Try again in {rateLimitCooldown}s</span>
+            ) : (
+              <>
+                Continue
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </button>
+        </form>
+      )}
 
       {/* Divider */}
       <div className="relative flex items-center justify-center">
@@ -295,7 +416,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ role, onOtpSent }) => {
         Continue with Google
       </button>
 
-      {showDevPrompt && (
+      {otpMode === 'dev' && showDevPrompt && (
         <div className="mt-4 p-4 border border-border-primary rounded-xl bg-bg-tertiary text-left space-y-3">
           <span className="text-xs font-extrabold text-brand-emerald uppercase tracking-wider block">
             [Dev Mode] Google Mock Account

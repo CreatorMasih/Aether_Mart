@@ -79,21 +79,21 @@ describe('⚡ Controlled UAT OTP Mode Integration Tests', () => {
       process.env.OTP_MODE = 'dev';
     });
 
-    const roles: Array<{ role: 'CUSTOMER' | 'SHOPKEEPER' | 'RIDER' | 'ADMIN'; email: string }> = [
-      { role: 'CUSTOMER', email: 'uat-customer@aethermart.com' },
-      { role: 'SHOPKEEPER', email: 'uat-merchant@aethermart.com' },
-      { role: 'RIDER', email: 'uat-rider@aethermart.com' },
-      { role: 'ADMIN', email: 'uat-admin@aethermart.com' },
+    const roles: Array<{ role: 'CUSTOMER' | 'SHOPKEEPER' | 'RIDER' | 'ADMIN'; identifier: string; type: 'SMS' | 'EMAIL' }> = [
+      { role: 'ADMIN', identifier: '123pratikkumar@gmail.com', type: 'EMAIL' },
+      { role: 'CUSTOMER', identifier: '+919876543210', type: 'SMS' },
+      { role: 'SHOPKEEPER', identifier: '+918888888881', type: 'SMS' },
+      { role: 'RIDER', identifier: '+917777777771', type: 'SMS' },
     ];
 
-    roles.forEach(({ role, email }) => {
-      it(`Should support end-to-end OTP flow for role: ${role}`, async () => {
+    roles.forEach(({ role, identifier, type }) => {
+      it(`Should support end-to-end OTP flow for ${role} using ${identifier}`, async () => {
         // 1. Send OTP
         const sendRes = await request(app)
           .post('/api/auth/send-otp')
           .send({
-            identifier: email,
-            type: 'EMAIL',
+            identifier,
+            type,
             role,
           });
 
@@ -104,10 +104,10 @@ describe('⚡ Controlled UAT OTP Mode Integration Tests', () => {
         const verifyRes = await request(app)
           .post('/api/auth/verify-otp')
           .send({
-            identifier: email,
+            identifier,
             code: '123456',
             role,
-            method: 'EMAIL',
+            method: type === 'EMAIL' ? 'EMAIL' : 'PHONE',
           });
 
         expect(verifyRes.status).toBe(200);
