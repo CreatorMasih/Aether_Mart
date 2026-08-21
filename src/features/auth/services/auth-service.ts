@@ -13,7 +13,27 @@ interface AuthResponseDTO {
   user: User;
 }
 
+export interface AuthConfigDTO {
+  otpMode: 'dev' | 'production';
+}
+
 export class AuthService extends BaseRepository {
+  /**
+   * Retrieves safe auth configuration (OTP mode)
+   */
+  public async getAuthConfig(): Promise<AuthConfigDTO> {
+    return this.executeRequest(async () => {
+      interface BackendResponse<T> {
+        success: boolean;
+        data: T;
+        message: string;
+      }
+      const response = await this.client.get<BackendResponse<AuthConfigDTO>>(
+        '/auth/config'
+      );
+      return response.data.data;
+    });
+  }
   /**
    * Triggers OTP delivery to SMS/Email
    */

@@ -1,4 +1,5 @@
 import { createModuleLogger } from '../../utils/logger';
+import { getOtpMode } from './otp.service';
 
 const log = createModuleLogger('SmsService');
 
@@ -172,9 +173,9 @@ class Msg91Provider implements ISmsProvider {
 class DisabledProvider implements ISmsProvider {
   async sendSms(options: SmsSendOptions): Promise<SmsResult> {
     const providerEnv = (process.env.SMS_PROVIDER || 'not_set').toLowerCase();
-    const isProd = process.env.NODE_ENV === 'production';
+    const isProductionOtpMode = getOtpMode() === 'production';
     
-    if (isProd) {
+    if (isProductionOtpMode) {
       const missingVars: string[] = [];
       if (providerEnv === 'twilio') {
         if (!process.env.TWILIO_ACCOUNT_SID) missingVars.push('TWILIO_ACCOUNT_SID');

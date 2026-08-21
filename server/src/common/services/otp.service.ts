@@ -12,6 +12,12 @@ const log = createModuleLogger('OtpService');
 const OTP_EXPIRY_MINUTES = parseInt(process.env.OTP_EXPIRY_MINUTES || '5', 10);
 const OTP_MAX_ATTEMPTS = parseInt(process.env.OTP_MAX_ATTEMPTS || '3', 10);
 
+export function getOtpMode(): 'dev' | 'production' {
+  if (process.env.OTP_MODE === 'production') return 'production';
+  if (process.env.OTP_MODE === 'dev') return 'dev';
+  return process.env.NODE_ENV === 'production' ? 'production' : 'dev';
+}
+
 export class OtpService {
   /**
    * Generates a new 6-digit OTP, stores its hash, and dispatches it via Email or SMS.
@@ -36,9 +42,9 @@ export class OtpService {
       data: { isUsed: true }, // Mark older OTPs as used/invalidated
     });
 
-    // Generate 6-digit OTP
-    const isDevOrTest = process.env.NODE_ENV !== 'production';
-    const rawOtp = isDevOrTest ? '123456' : generateOtp(6);
+    const mode = getOtpMode();
+    const isDevMode = mode === 'dev';
+    const rawOtp = isDevMode ? '123456' : generateOtp(6);
     
     // Hash it before storing for security
     const otpHash = await hashValue(rawOtp);
@@ -58,21 +64,21 @@ export class OtpService {
       },
     });
 
-    if (isDevOrTest) {
-      log.info(`[DevMode] Verification code generated for ${identifier}: ${rawOtp}`);
+    if (isDevMode) {
+      log.info(`[DevMode/UAT] Verification code generated for ${identifier}: ${rawOtp}`);
+      return true; // Bypass real SMS/Email provider calls in dev/UAT mode
     }
 
-    // Send OTP
+    log.info(`[Production] Verification code generated for ${identifier} via ${channel}`);
+
+    // Send OTP in production mode
     if (channel === OtpChannel.EMAIL) {
       return emailService.sendOtpEmail(identifier, rawOtp, OTP_EXPIRY_MINUTES);
     } else {
-      if (process.env.SMS_OTP_ENABLED !== 'true') {
-        log.warn(`SMS OTP requested but SMS_OTP_ENABLED is false.`);
-      }
       const smsResult = await smsService.sendOtp(identifier, rawOtp);
       if (!smsResult.success) {
         throw new AppError(
-          smsResult.error || 'SMS delivery failed via provider',
+          smsResult.error || 'SMS service provider is unconfigured or unavailable',
           HttpStatus.SERVICE_UNAVAILABLE,
           ErrorCodes.INTERNAL_ERROR,
           { provider: smsResult.provider }

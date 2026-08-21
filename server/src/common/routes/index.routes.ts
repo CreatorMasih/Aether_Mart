@@ -12,7 +12,9 @@ router.use('/', healthRouter);
 
 // ── Auth (Phase 3) ────────────────────────────────────────────────────────────
 import authRoutes from '../../modules/auth/auth.routes';
+import { authController } from '../../modules/auth/auth.controller';
 router.use('/auth', authRoutes);
+router.get('/config', authController.getConfig);
 
 // ── Customer (Phase 3-5) ──────────────────────────────────────────────────────
 import customerRoutes from '../../modules/customer/customer.routes';

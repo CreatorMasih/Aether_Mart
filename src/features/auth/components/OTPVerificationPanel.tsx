@@ -26,9 +26,25 @@ export const OTPVerificationPanel: React.FC<OTPVerificationPanelProps> = ({
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [isResending, setIsResending] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [otpMode, setOtpMode] = useState<'dev' | 'production'>('production');
   const { showToast } = useToast();
 
   const lastVerifiedOtpRef = useRef<string>('');
+
+  // Fetch server OTP mode config
+  useEffect(() => {
+    let isMounted = true;
+    authService.getAuthConfig()
+      .then((config) => {
+        if (isMounted && config?.otpMode) {
+          setOtpMode(config.otpMode);
+        }
+      })
+      .catch(() => {
+        // Fallback remains 'production'
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   // Countdown timer decrement
   useEffect(() => {
@@ -146,9 +162,10 @@ export const OTPVerificationPanel: React.FC<OTPVerificationPanelProps> = ({
         <p className="text-xs text-text-secondary">
           Enter the OTP sent to <span className="font-bold text-text-primary">{identifier}</span>
         </p>
-        {import.meta.env.DEV && (
-          <div className="mt-2 inline-block px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-800 text-[10px] font-bold rounded-lg tracking-wide">
-            ⚡ Test OTP Mode — Development Only (Use code: 123456)
+        {otpMode === 'dev' && (
+          <div className="mt-2.5 px-3 py-2 bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-bold rounded-lg tracking-wide text-center space-y-0.5">
+            <div>⚡ Test OTP Mode — UAT Only</div>
+            <div>Use OTP: 123456</div>
           </div>
         )}
       </div>

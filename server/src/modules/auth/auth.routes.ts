@@ -9,6 +9,18 @@ const router = Router();
 
 /**
  * @swagger
+ * /auth/config:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Retrieve safe auth configuration (OTP mode)
+ *     responses:
+ *       200:
+ *         description: Auth configuration retrieved
+ */
+router.get('/config', authController.getConfig);
+
+/**
+ * @swagger
  * /auth/send-otp:
  *   post:
  *     tags: [Auth]

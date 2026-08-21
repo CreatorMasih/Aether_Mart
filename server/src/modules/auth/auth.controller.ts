@@ -3,10 +3,22 @@ import { authService } from './auth.service';
 import { sendSuccess, sendError, HttpStatus, ErrorCodes } from '../../utils/response.util';
 import { refreshTokenCookieOptions, clearRefreshTokenCookieOptions } from '../../utils/jwt.util';
 import { createModuleLogger } from '../../utils/logger';
+import { getOtpMode } from '../../common/services/otp.service';
 
 const log = createModuleLogger('AuthController');
 
 export class AuthController {
+  /**
+   * Safe read-only config endpoint exposing current OTP mode.
+   */
+  public getConfig = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const otpMode = getOtpMode();
+      sendSuccess(res, { otpMode }, 'Auth configuration retrieved successfully', HttpStatus.OK);
+    } catch (error) {
+      next(error);
+    }
+  };
   /**
    * Triggers OTP sending flow.
    */
