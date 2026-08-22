@@ -151,6 +151,14 @@ export const routes: RouteObject[] = [
             element: withSuspense(LiveOrderTrackingPage),
           },
           {
+            path: 'profile',
+            element: withSuspense(CustomerDashboardPage),
+          },
+          {
+            path: 'account',
+            element: withSuspense(CustomerDashboardPage),
+          },
+          {
             path: 'profile/insights',
             element: withSuspense(CustomerDashboardPage),
           },

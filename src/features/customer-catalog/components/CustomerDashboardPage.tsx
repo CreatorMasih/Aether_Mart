@@ -189,6 +189,14 @@ export const CustomerDashboardPage: React.FC = () => {
               </button>
             );
           })}
+
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-status-error hover:bg-status-error/10 transition-all cursor-pointer border-t border-border-primary/40 mt-2 pt-2"
+          >
+            <LogOut className="h-4.5 w-4.5" />
+            Logout Session
+          </button>
         </nav>
       </div>
 

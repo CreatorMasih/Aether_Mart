@@ -40,7 +40,11 @@ export const BottomNavBar: React.FC = () => {
 
       <nav className="fixed bottom-0 left-0 right-0 z-sticky bg-bg-secondary/95 backdrop-blur-md border-t border-border-primary py-2 px-4 flex items-center justify-around md:hidden shadow-high pointer-events-auto">
         {navItems.map((item, idx) => {
-          const isActive = location.pathname.startsWith(item.path.split('?')[0]);
+          const currentTab = new URLSearchParams(location.search).get('tab');
+          const targetTab = item.path.includes('?tab=') ? new URLSearchParams(item.path.split('?')[1]).get('tab') : null;
+          const isActive = targetTab 
+            ? location.pathname === '/c/profile' && (currentTab === targetTab || (!currentTab && targetTab === 'profile'))
+            : location.pathname === item.path;
           return (
             <button
               key={idx}

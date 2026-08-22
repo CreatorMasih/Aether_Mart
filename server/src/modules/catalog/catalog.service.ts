@@ -83,22 +83,23 @@ export class CatalogService {
     // 6. Geolocation distance filtering via stores
     if (query.latitude !== undefined && query.longitude !== undefined) {
       const stores = await catalogRepository.findStores(true);
-      const nearbyStoreIds = stores
+      let nearbyStoreIds = stores
         .filter((store) => {
           const dist = haversineDistance(
             { latitude: query.latitude!, longitude: query.longitude! },
             { latitude: store.latitude, longitude: store.longitude }
           );
-          // Filter stores within maximum distance, store's own delivery range, and active status
-          const isOperational = store.isOpen && !store.isPaused && !store.isHoliday;
-          return dist <= (query.maxDistanceKm || 10) && dist <= store.deliveryRadiusKm && isOperational;
+          return dist <= Math.max(query.maxDistanceKm || 10, store.deliveryRadiusKm || 10) && !store.isPaused && !store.isHoliday;
         })
         .map((store) => store.id);
 
+      if (nearbyStoreIds.length === 0 && stores.length > 0) {
+        nearbyStoreIds = stores.map((s) => s.id);
+      }
+
       if (query.storeId) {
-        // Intersect
-        where.storeId = nearbyStoreIds.includes(query.storeId) ? query.storeId : 'NONE';
-      } else {
+        where.storeId = query.storeId;
+      } else if (nearbyStoreIds.length > 0) {
         where.storeId = { in: nearbyStoreIds };
       }
     } else if (query.storeId) {
@@ -227,21 +228,21 @@ export class CatalogService {
     // Filter/sort stores by distance if coordinates provided
     let nearbyStores = stores;
     if (lat !== undefined && lng !== undefined) {
-      nearbyStores = stores
-        .map((store) => {
-          const distance = haversineDistance(
-            { latitude: lat, longitude: lng },
-            { latitude: store.latitude, longitude: store.longitude }
-          );
-          return {
-            ...store,
-            distance,
-            estimatedDeliveryTime: store.deliveryTimeMins + Math.ceil(distance * 3), // 3 mins per km
-            available: distance <= store.deliveryRadiusKm && store.isOpen && !store.isPaused && !store.isHoliday,
-          };
-        })
-        .filter((s) => s.available)
-        .sort((a, b) => a.distance - b.distance);
+      const mapped = stores.map((store) => {
+        const distance = haversineDistance(
+          { latitude: lat, longitude: lng },
+          { latitude: store.latitude, longitude: store.longitude }
+        );
+        return {
+          ...store,
+          distance,
+          estimatedDeliveryTime: (store.deliveryTimeMins || 15) + Math.ceil(distance * 3), // 3 mins per km
+          available: !store.isPaused && !store.isHoliday,
+        };
+      });
+
+      const filtered = mapped.filter((s) => s.available).sort((a, b) => a.distance - b.distance);
+      nearbyStores = filtered.length > 0 ? filtered : mapped;
     }
 
     const [banners, flashDeals, topRated] = await Promise.all([
