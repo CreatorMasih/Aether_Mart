@@ -1,22 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { History, MapPin, Sparkles, Star, Milk, Pill, Apple, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { History, MapPin, Star, Milk, Pill, Apple, AlertTriangle, Zap, Shield, CheckCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
 import { catalogService } from '../services/catalog-service';
 import { queryKeys } from '../../../core/network/queryKeys';
-import { BannerSlider } from './BannerSlider';
 import { CategoryCircleGrid } from './CategoryCircleGrid';
 import { ProductCardGrid } from './ProductCardGrid';
 import { StoreCardGrid } from './StoreCardGrid';
 import { pageTransition } from '../../../core/theme/animations';
 import { NotServiceableState } from '../../../components/ui/NotServiceableState';
-import { LocationPickerModal } from '../../../components/ui/LocationPickerModal';
 import { DEFAULT_MAHASAMUND_ADDRESS, checkLocationServiceability } from '../../../core/config/serviceability';
 
 export const HomeScreen: React.FC = () => {
   const { recentlyViewed, selectedAddress, setSelectedAddress } = useCustomerStore();
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
   // Auto-resolve location on mount if not selected
   useEffect(() => {
@@ -52,18 +49,18 @@ export const HomeScreen: React.FC = () => {
     }
   }, [selectedAddress, setSelectedAddress]);
 
-  const lat = selectedAddress?.coordinates?.latitude;
-  const lng = selectedAddress?.coordinates?.longitude;
+  const lat = selectedAddress?.coordinates?.latitude ?? 21.1085;
+  const lng = selectedAddress?.coordinates?.longitude ?? 82.0965;
   const isServiceable = selectedAddress ? selectedAddress.isServiceable !== false : true;
 
-  // 1. Fetch Dynamic Home Feed
+  // Fetch Dynamic Home Feed
   const { data: homeFeed, isLoading: isFeedLoading, isError: isFeedError, refetch: refetchFeed } = useQuery({
     queryKey: queryKeys.homeFeed(lat, lng),
     queryFn: () => catalogService.getHomeFeed(lat, lng),
     enabled: isServiceable,
   });
 
-  // 2. Parallel Category Shelf Queries
+  // Parallel Category Shelf Queries
   const { data: dailyEssentialsRes } = useQuery({
     queryKey: queryKeys.products({ category: 'daily-essentials', limit: 4 }),
     queryFn: () => catalogService.getProducts({ category: 'daily-essentials', limit: 4 }),
@@ -84,39 +81,27 @@ export const HomeScreen: React.FC = () => {
     queryFn: () => catalogService.getProducts({ category: 'personal-care', limit: 4 }),
   });
 
-  const { data: petCareRes } = useQuery({
-    queryKey: queryKeys.products({ category: 'pet-care', limit: 4 }),
-    queryFn: () => catalogService.getProducts({ category: 'pet-care', limit: 4 }),
-  });
-
-  const { data: electronicsRes } = useQuery({
-    queryKey: queryKeys.products({ category: 'electronics', limit: 4 }),
-    queryFn: () => catalogService.getProducts({ category: 'electronics', limit: 4 }),
-  });
-
   const dailyEssentialsProducts = dailyEssentialsRes?.products || [];
   const pharmacyProducts = pharmacyRes?.products || [];
   const freshProduceProducts = freshProduceRes?.products || [];
   const personalCareProducts = personalCareRes?.products || [];
-  const petCareProducts = petCareRes?.products || [];
-  const electronicsProducts = electronicsRes?.products || [];
 
   const renderSectionHeader = (icon: React.ReactNode, title: string, subtitle?: string, badge?: string) => (
-    <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center justify-between mb-4 select-none">
       <div className="flex items-center gap-2">
-        <div className="p-2 rounded-xl bg-bg-secondary border border-border-primary text-brand-emerald shadow-subtle">
+        <div className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-emerald-600 shadow-xs">
           {icon}
         </div>
         <div>
-          <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading flex items-center gap-2">
+          <h2 className="text-sm font-extrabold text-slate-900 tracking-tight font-heading flex items-center gap-2">
             {title}
             {badge && (
-              <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-status-error/10 text-status-error tracking-wide uppercase font-semibold">
+              <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-red-100 text-red-700 tracking-wide uppercase font-semibold">
                 {badge}
               </span>
             )}
           </h2>
-          {subtitle && <p className="text-[10px] text-text-secondary font-semibold mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{subtitle}</p>}
         </div>
       </div>
     </div>
@@ -124,21 +109,20 @@ export const HomeScreen: React.FC = () => {
 
   if (!isServiceable) {
     return (
-      <>
-        <NotServiceableState
-          currentLocationName={selectedAddress?.city || selectedAddress?.postalCode || 'your area'}
-          onChangeLocationClick={() => setIsLocationModalOpen(true)}
-        />
-        <LocationPickerModal isOpen={isLocationModalOpen} onClose={() => setIsLocationModalOpen(false)} />
-      </>
+      <NotServiceableState
+        currentLocationName={selectedAddress?.city || selectedAddress?.postalCode || 'your area'}
+        onChangeLocationClick={() => {
+          setSelectedAddress(DEFAULT_MAHASAMUND_ADDRESS);
+        }}
+      />
     );
   }
 
   if (isFeedLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 space-y-4">
-        <div className="h-8 w-8 rounded-full border-2 border-brand-emerald border-t-transparent animate-spin" />
-        <p className="text-xs text-text-secondary font-semibold">Loading your neighborhood storefront...</p>
+        <div className="h-8 w-8 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
+        <p className="text-xs text-slate-500 font-semibold">Loading your Mahasamund storefront...</p>
       </div>
     );
   }
@@ -146,14 +130,14 @@ export const HomeScreen: React.FC = () => {
   if (isFeedError) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
-        <div className="p-3 rounded-full bg-status-error/10 text-status-error">
+        <div className="p-3 rounded-full bg-red-100 text-red-600">
           <AlertTriangle className="h-8 w-8" />
         </div>
-        <h2 className="text-sm font-bold text-text-primary font-heading">Failed to Load Storefront</h2>
-        <p className="text-xs text-text-secondary max-w-xs">An error occurred while connecting to our server coordinates. Please check your network connection.</p>
+        <h2 className="text-sm font-bold text-slate-900 font-heading">Failed to Load Storefront</h2>
+        <p className="text-xs text-slate-500 max-w-xs">An error occurred while connecting to our Mahasamund servers.</p>
         <button 
           onClick={() => refetchFeed()} 
-          className="px-4 py-2 bg-text-primary text-bg-secondary hover:bg-text-primary/95 text-xs font-bold rounded-lg cursor-pointer"
+          className="px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold rounded-xl cursor-pointer"
         >
           Try Reconnecting
         </button>
@@ -170,139 +154,129 @@ export const HomeScreen: React.FC = () => {
       animate="animate"
       className="space-y-8 pb-12"
     >
-      {/* 1. Promotional Banners Carousel */}
-      <section aria-label="Featured Offers">
-        <BannerSlider banners={feed.banners} />
-      </section>
+      {/* 1. CUSTOMER HERO SECTION (Matching Reference Design Target) */}
+      <section aria-label="Hero Banner" className="select-none">
+        <div className="relative w-full rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-6 sm:p-8 text-white overflow-hidden shadow-lg border border-emerald-700/40">
+          {/* Decorative radial gradients */}
+          <div className="absolute -top-12 -right-12 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* 2. 📍 Nearest Store & Stores near you */}
-      <section aria-label="Stores near you" className="space-y-4">
-        {feed.nearbyStores.length > 0 ? (
-          <>
-            {/* Nearest Store */}
-            <div>
-              {renderSectionHeader(<MapPin className="h-5 w-5 text-brand-emerald" />, 'Nearest to you', 'Closest merchant delivering in 15 mins')}
-              <StoreCardGrid stores={[feed.nearbyStores[0]]} />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            {/* Left Content Column */}
+            <div className="space-y-4 max-w-xl text-center md:text-left">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-emerald-200 text-xs font-bold font-heading">
+                <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
+                <span>10-30 mins delivery in Mahasamund</span>
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight font-heading leading-tight text-white">
+                Fresh groceries, delivered fast at your doorstep
+              </h1>
+
+              <p className="text-xs sm:text-sm text-emerald-100/90 font-medium leading-relaxed max-w-md">
+                Best quality products from trusted local stores in Mahasamund. Daily essentials, fresh produce, dairy & more.
+              </p>
+
+              {/* Service Highlight Badges */}
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1">
+                <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 text-amber-300" />
+                  <span>Fast Delivery</span>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
+                  <CheckCircle className="h-3.5 w-3.5 text-emerald-300" />
+                  <span>Best Quality</span>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
+                  <Shield className="h-3.5 w-3.5 text-blue-300" />
+                  <span>Secure Payment</span>
+                </div>
+              </div>
             </div>
 
-            {/* Other Stores Near You */}
-            {feed.nearbyStores.length > 1 && (
-              <div>
-                {renderSectionHeader(<MapPin className="h-5 w-5" />, 'Other stores near you', 'Explore more local storefronts')}
-                <StoreCardGrid stores={feed.nearbyStores.slice(1)} />
+            {/* Right Column: Hero Visual Illustration */}
+            <div className="relative shrink-0 w-48 sm:w-64 md:w-72 aspect-4/3 rounded-2xl overflow-hidden border border-white/20 bg-white/10 backdrop-blur-md p-1.5 shadow-2xl">
+              <img
+                src="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80"
+                alt="Fresh Groceries Mahasamund"
+                className="w-full h-full object-cover rounded-xl"
+              />
+              <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-xl bg-emerald-600/95 backdrop-blur-md text-white text-[10px] font-extrabold flex items-center gap-1 shadow-md border border-white/20">
+                <span>🛵</span> 10-30 mins
               </div>
-            )}
-          </>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Shop by Category */}
+      <section aria-label="Browse Categories" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-extrabold text-slate-900 font-heading">Shop by Category</h2>
+        </div>
+        <CategoryCircleGrid />
+      </section>
+
+      {/* 3. Available Stores Near You */}
+      <section aria-label="Stores near you" className="space-y-4">
+        {feed.nearbyStores.length > 0 ? (
+          <div>
+            {renderSectionHeader(<MapPin className="h-5 w-5 text-emerald-600" />, 'Available Stores Near You', 'Top stores delivering in Mahasamund')}
+            <StoreCardGrid stores={feed.nearbyStores} />
+          </div>
         ) : (
-          <div className="p-8 rounded-2xl border border-dashed border-border-primary bg-bg-secondary text-center space-y-3">
-            <span className="text-4xl block">📍</span>
-            <h3 className="text-sm font-extrabold text-text-primary font-heading">
-              No stores available at your location yet.
-            </h3>
-            <p className="text-xs text-text-secondary max-w-xs mx-auto">
-              Aether Mart isn't available at this location yet. Try changing your pincode or area.
-            </p>
-            <button
-              onClick={() => setIsLocationModalOpen(true)}
-              className="px-4 py-2 bg-brand-emerald text-white hover:bg-brand-emerald-hover text-xs font-bold rounded-xl cursor-pointer shadow-subtle"
-            >
-              Change Location
-            </button>
+          <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 text-center space-y-2">
+            <h3 className="text-xs font-bold text-slate-700">Connecting to Mahasamund Stores...</h3>
+            <p className="text-[11px] text-slate-500">Checking nearest store availability in Mahasamund.</p>
           </div>
         )}
       </section>
 
-      {/* 3. Instant Shop Categories Grid */}
-      <section aria-label="Browse Categories">
-        <CategoryCircleGrid />
-      </section>
-
-      {/* 7. 🛒 Continue Shopping */}
-      {recentlyViewed.length > 0 && (
-        <section>
-          {renderSectionHeader(<History className="h-5 w-5" />, 'Continue Shopping', 'Pick up where you left off')}
-          <ProductCardGrid products={recentlyViewed.slice(0, 4)} />
-        </section>
-      )}
-
-      {/* 8. ⭐ Top Picks for You */}
+      {/* 4. Top Picks for You */}
       {feed.recommendedProducts.length > 0 && (
-        <section>
-          {renderSectionHeader(<Star className="h-5 w-5 fill-status-warning text-status-warning" />, 'Top Picks for You', 'Fresh daily essentials from local stores')}
+        <section className="space-y-3">
+          {renderSectionHeader(<Star className="h-5 w-5 fill-amber-400 text-amber-400" />, 'Top Picks for You', 'Fresh daily essentials from local stores')}
           <ProductCardGrid products={feed.recommendedProducts} />
         </section>
       )}
 
-      {/* 9. 🥛 Daily Essentials */}
+      {/* 5. Recently Viewed / Continue Shopping */}
+      {recentlyViewed.length > 0 && (
+        <section className="space-y-3">
+          {renderSectionHeader(<History className="h-5 w-5 text-emerald-600" />, 'Continue Shopping', 'Pick up where you left off')}
+          <ProductCardGrid products={recentlyViewed.slice(0, 4)} />
+        </section>
+      )}
+
+      {/* 6. Daily Essentials Shelf */}
       {dailyEssentialsProducts.length > 0 && (
-        <section>
-          {renderSectionHeader(<Milk className="h-5 w-5" />, 'Daily Essentials', 'Milk, bread, butter, eggs & baking')}
+        <section className="space-y-3">
+          {renderSectionHeader(<Milk className="h-5 w-5 text-emerald-600" />, 'Daily Essentials', 'Milk, bread, butter, eggs & bakery')}
           <ProductCardGrid products={dailyEssentialsProducts} />
         </section>
       )}
 
-      {/* 10. 💊 Pharmacy */}
+      {/* 7. Pharmacy Shelf */}
       {pharmacyProducts.length > 0 && (
-        <section>
-          {renderSectionHeader(<Pill className="h-5 w-5" />, 'Pharmacy Essentials', 'OTC medicines, wellness, and care', '12 Min')}
+        <section className="space-y-3">
+          {renderSectionHeader(<Pill className="h-5 w-5 text-emerald-600" />, 'Pharmacy Essentials', 'OTC medicines, wellness, and personal care')}
           <ProductCardGrid products={pharmacyProducts} />
         </section>
       )}
 
-      {/* 11. 🍎 Fresh Fruits & Vegetables */}
+      {/* 8. Fresh Produce Shelf */}
       {freshProduceProducts.length > 0 && (
-        <section>
-          {renderSectionHeader(<Apple className="h-5 w-5" />, 'Fresh Fruits & Vegetables', 'Farm-fresh organic vegetables and seasonal fruits')}
+        <section className="space-y-3">
+          {renderSectionHeader(<Apple className="h-5 w-5 text-emerald-600" />, 'Fresh Fruits & Vegetables', 'Farm-fresh organic vegetables and seasonal fruits')}
           <ProductCardGrid products={freshProduceProducts} />
         </section>
       )}
 
-      {/* 12. 🧴 Personal Care */}
+      {/* 9. Personal Care Shelf */}
       {personalCareProducts.length > 0 && (
-        <section>
-          {renderSectionHeader(<Sparkles className="h-5 w-5" />, 'Personal Care', 'Shampoos, body washes, skin lotions')}
+        <section className="space-y-3">
+          {renderSectionHeader(<Apple className="h-5 w-5 text-emerald-600" />, 'Personal Care & Hygiene', 'Skincare, haircare, and personal hygiene')}
           <ProductCardGrid products={personalCareProducts} />
-        </section>
-      )}
-
-      {/* 13. 🐶 Pet Care */}
-      {petCareProducts.length > 0 && (
-        <section>
-          {renderSectionHeader(<Sparkles className="h-5 w-5" />, 'Pet Care', 'Kibble, treats, grooming, and pet hygiene')}
-          <ProductCardGrid products={petCareProducts} />
-        </section>
-      )}
-
-      {/* 14. 📱 Electronics Expansion */}
-      {electronicsProducts.length > 0 && (
-        <section className="relative opacity-70 group">
-          {renderSectionHeader(<ShieldAlert className="h-5 w-5" />, 'Electronics & Devices', 'Cables, adapter fast chargers, earbuds', 'COMING SOON')}
-          <div className="absolute inset-0 z-10 bg-bg-primary/30 backdrop-blur-[1px] flex items-center justify-center pointer-events-none rounded-2xl border border-dashed border-border-primary">
-            <span className="text-[10px] font-extrabold px-3 py-1 rounded bg-text-primary text-bg-secondary shadow-subtle uppercase tracking-wider font-heading">
-              Coming Soon to your pincode
-            </span>
-          </div>
-          <ProductCardGrid products={electronicsProducts} />
-        </section>
-      )}
-
-      {/* 15. 🎉 Seasonal Offers */}
-      {feed.seasonalOffers.length > 0 && (
-        <section className="p-6 rounded-2xl border border-border-primary bg-gradient-to-r from-violet-500/10 via-fuchsia-500/5 to-bg-secondary flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center md:text-left">
-            <span className="text-[8px] font-extrabold px-2 py-0.5 rounded bg-brand-violet/10 text-brand-violet font-heading tracking-wide uppercase font-semibold">
-              SEASONAL FESTIVAL
-            </span>
-            <h3 className="text-base font-extrabold text-text-primary leading-tight font-heading">
-              {feed.seasonalOffers[0].title}
-            </h3>
-            <p className="text-xs text-text-secondary">
-              Equip yourself with active deals on seasonal products from nearby coordinate stores.
-            </p>
-          </div>
-          <button className="py-2 px-4 rounded-lg bg-text-primary text-bg-secondary hover:bg-text-primary/90 font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 self-center">
-            Browse Monsoon Deals
-          </button>
         </section>
       )}
     </motion.div>
