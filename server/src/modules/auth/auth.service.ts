@@ -1,3 +1,4 @@
+import { prisma } from '../../config/database.config';
 import { authRepository } from './auth.repository';
 import { otpService } from '../../common/services/otp.service';
 import { generateTokenPair, verifyRefreshToken } from '../../utils/jwt.util';
@@ -357,55 +358,142 @@ export class AuthService {
 
     if (data.role === UserRole.CUSTOMER && data.customerDetails) {
       const details = data.customerDetails;
-      await authRepository.createCustomerProfile(user.id, details.fullName, details.email);
-      
-      if (details.defaultAddress) {
-        await authRepository.createAddress(user.id, {
-          ...details.defaultAddress,
-          isDefault: true,
-        });
-      }
-      
-      // Send Welcome Email
+
       if (details.email) {
-        await emailService.sendWelcomeEmail(details.email, details.fullName);
+        const existingWithEmail = await authRepository.findUserByIdentifier(details.email);
+        if (existingWithEmail && existingWithEmail.id !== userId) {
+          throw new AppError('This email address is already registered to another user account.', HttpStatus.CONFLICT, ErrorCodes.ALREADY_EXISTS);
+        }
+      }
+
+      if (user.customer) {
+        log.info(`Customer profile already exists for user ${userId}. Performing idempotent update.`);
+        await authRepository.updateCustomerProfile(user.customer.id, {
+          fullName: details.fullName || user.customer.fullName,
+        });
+        if (details.email) {
+          await authRepository.updateUser(userId, { email: details.email });
+        }
+        if (details.defaultAddress) {
+          const hasDefault = (user.addresses || []).some((a: any) => a.isDefault);
+          if (!hasDefault) {
+            await authRepository.createAddress(user.id, {
+              ...details.defaultAddress,
+              isDefault: true,
+            });
+          }
+        }
+      } else {
+        await authRepository.createCustomerProfile(user.id, details.fullName, details.email);
+        if (details.defaultAddress) {
+          await authRepository.createAddress(user.id, {
+            ...details.defaultAddress,
+            isDefault: true,
+          });
+        }
+        if (details.email) {
+          await emailService.sendWelcomeEmail(details.email, details.fullName);
+        }
       }
     } 
     else if (data.role === UserRole.SHOPKEEPER && data.merchantDetails) {
       const details = data.merchantDetails;
-      const merchant = await authRepository.createMerchantProfile(user.id, details.fullName, details.email);
-      
-      await authRepository.createStore(merchant.id, {
-        name: details.storeName,
-        address: details.storeAddress,
-        latitude: details.latitude,
-        longitude: details.longitude,
-        deliveryRadiusKm: details.deliveryRadiusKm,
-      });
 
-      // Update merchant optional details if present
-      const merchantData: any = {};
-      if (details.gstNumber) merchantData.gstNumber = details.gstNumber;
-      if (details.fssaiNumber) merchantData.fssaiNumber = details.fssaiNumber;
-      if (Object.keys(merchantData).length > 0) {
-        await authRepository.updateMerchantProfile(merchant.id, merchantData);
+      if (details.email) {
+        const existingWithEmail = await authRepository.findUserByIdentifier(details.email);
+        if (existingWithEmail && existingWithEmail.id !== userId) {
+          throw new AppError('This email address is already registered to another user account.', HttpStatus.CONFLICT, ErrorCodes.ALREADY_EXISTS);
+        }
       }
 
-      await emailService.sendWelcomeEmail(details.email, details.fullName);
+      if (user.merchant) {
+        log.info(`Merchant profile already exists for user ${userId}. Performing idempotent update.`);
+        await authRepository.updateMerchantProfile(user.merchant.id, {
+          fullName: details.fullName || user.merchant.fullName,
+        });
+        if (details.email) {
+          await authRepository.updateUser(userId, { email: details.email });
+        }
+        const merchantData: any = {};
+        if (details.gstNumber) merchantData.gstNumber = details.gstNumber;
+        if (details.fssaiNumber) merchantData.fssaiNumber = details.fssaiNumber;
+        if (Object.keys(merchantData).length > 0) {
+          await authRepository.updateMerchantProfile(user.merchant.id, merchantData);
+        }
+        if (user.merchant.store) {
+          await prisma.store.update({
+            where: { id: user.merchant.store.id },
+            data: {
+              name: details.storeName || user.merchant.store.name,
+              address: details.storeAddress || user.merchant.store.address,
+              latitude: details.latitude ?? user.merchant.store.latitude,
+              longitude: details.longitude ?? user.merchant.store.longitude,
+              deliveryRadiusKm: details.deliveryRadiusKm ?? user.merchant.store.deliveryRadiusKm,
+            },
+          });
+        } else {
+          await authRepository.createStore(user.merchant.id, {
+            name: details.storeName,
+            address: details.storeAddress,
+            latitude: details.latitude,
+            longitude: details.longitude,
+            deliveryRadiusKm: details.deliveryRadiusKm,
+          });
+        }
+      } else {
+        const merchant = await authRepository.createMerchantProfile(user.id, details.fullName, details.email);
+        await authRepository.createStore(merchant.id, {
+          name: details.storeName,
+          address: details.storeAddress,
+          latitude: details.latitude,
+          longitude: details.longitude,
+          deliveryRadiusKm: details.deliveryRadiusKm,
+        });
+
+        const merchantData: any = {};
+        if (details.gstNumber) merchantData.gstNumber = details.gstNumber;
+        if (details.fssaiNumber) merchantData.fssaiNumber = details.fssaiNumber;
+        if (Object.keys(merchantData).length > 0) {
+          await authRepository.updateMerchantProfile(merchant.id, merchantData);
+        }
+
+        await emailService.sendWelcomeEmail(details.email, details.fullName);
+      }
     } 
     else if (data.role === UserRole.RIDER && data.riderDetails) {
       const details = data.riderDetails;
-      await authRepository.createRiderProfile(
-        user.id,
-        details.fullName,
-        details.vehicleType,
-        details.vehiclePlateNumber,
-        details.licenseNumber,
-        details.email
-      );
 
       if (details.email) {
-        await emailService.sendWelcomeEmail(details.email, details.fullName);
+        const existingWithEmail = await authRepository.findUserByIdentifier(details.email);
+        if (existingWithEmail && existingWithEmail.id !== userId) {
+          throw new AppError('This email address is already registered to another user account.', HttpStatus.CONFLICT, ErrorCodes.ALREADY_EXISTS);
+        }
+      }
+
+      if (user.rider) {
+        log.info(`Rider profile already exists for user ${userId}. Performing idempotent update.`);
+        await authRepository.updateRiderProfile(user.rider.id, {
+          fullName: details.fullName || user.rider.fullName,
+          vehicleType: details.vehicleType || user.rider.vehicleType,
+          vehiclePlateNumber: details.vehiclePlateNumber || user.rider.vehiclePlateNumber,
+          licenseNumber: details.licenseNumber || user.rider.licenseNumber,
+        });
+        if (details.email) {
+          await authRepository.updateUser(userId, { email: details.email });
+        }
+      } else {
+        await authRepository.createRiderProfile(
+          user.id,
+          details.fullName,
+          details.vehicleType,
+          details.vehiclePlateNumber,
+          details.licenseNumber,
+          details.email
+        );
+
+        if (details.email) {
+          await emailService.sendWelcomeEmail(details.email, details.fullName);
+        }
       }
     }
 

@@ -10,6 +10,36 @@ import {
 } from './merchant.validator';
 
 export class MerchantController {
+  public getProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const result = await merchantService.getStoreProfile(userId);
+      sendSuccess(res, result, 'Merchant store profile retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const products = await merchantService.getMerchantProducts(userId);
+      sendSuccess(res, products, 'Merchant products retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
   public updateProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user?.userId;

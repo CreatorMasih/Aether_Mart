@@ -1,21 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: hsl(var(--bg-primary));
-  --color-bg-secondary: hsl(var(--bg-secondary));
-  --color-bg-tertiary: hsl(var(--bg-tertiary));
-  --color-text-primary: hsl(var(--text-primary));
-  --color-text-secondary: hsl(var(--text-secondary));
-  --color-border-primary: hsl(var(--border-primary));
+  --color-bg-primary: #f8fafc;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #f1f5f9;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-border-primary: #cbd5e1;
   
-  --color-brand-emerald: hsl(var(--brand-emerald));
-  --color-brand-emerald-hover: hsl(var(--brand-emerald-hover));
-  --color-brand-violet: hsl(var(--brand-violet));
+  --color-brand-primary: #10b981;
+  --color-brand-primary-hover: #059669;
+  --color-brand-emerald: #10b981;
+  --color-brand-emerald-hover: #059669;
+  --color-brand-violet: #8b5cf6;
+
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f8fafc;
+  --color-border: #cbd5e1;
   
-  --color-status-success: hsl(var(--status-success));
-  --color-status-warning: hsl(var(--status-warning));
-  --color-status-error: hsl(var(--status-error));
-  --color-status-info: hsl(var(--status-info));
+  --color-status-success: #16a34a;
+  --color-status-warning: #d97706;
+  --color-status-error: #dc2626;
+  --color-status-info: #2563eb;
+
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-info: #2563eb;
   
   --shadow-low: 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow-mid: 0 10px 20px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.02);
@@ -50,23 +61,6 @@
   --brand-emerald: 162 84% 39%;       /* Primary green (#10b981) */
   --brand-emerald-hover: 162 84% 30%;
   --brand-violet: 262 80% 50%;        /* Secondary violet */
-  
-  --status-success: 142 76% 36%;
-  --status-warning: 38 92% 50%;
-  --status-error: 0 84% 60%;
-  --status-info: 214 94% 50%;
-}
-
-.dark {
-  --bg-primary: 210 20% 98%;          /* Slate-50 */
-  --bg-secondary: 0 0% 100%;          /* White */
-  --bg-tertiary: 210 20% 95%;         /* Slate-100/50 */
-  --text-primary: 222 47% 11%;        /* Slate-900 */
-  --text-secondary: 215 16% 47%;      /* Slate-500 */
-  --border-primary: 214 32% 91%;      /* Slate-200 */
-  
-  --brand-emerald: 162 84% 39%;       /* Primary green (#10b981) */
-  --brand-emerald-hover: 162 84% 30%;
   
   --status-success: 142 76% 36%;
   --status-warning: 38 92% 50%;

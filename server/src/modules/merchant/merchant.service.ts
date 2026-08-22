@@ -17,6 +17,76 @@ const log = createModuleLogger('MerchantService');
 
 export class MerchantService {
   /**
+   * Retrieves or auto-creates the merchant profile and linked store for the authenticated user.
+   */
+  public async getStoreProfile(userId: string): Promise<{ merchant: any; store: any }> {
+    let merchant = await merchantRepository.findMerchantByUserId(userId);
+
+    if (!merchant) {
+      const user = await merchantRepository.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (!user) throw new NotFoundError('User account');
+
+      merchant = await merchantRepository.prisma.merchant.create({
+        data: {
+          userId,
+          fullName: user.email?.split('@')[0] || user.phone || 'Store Manager',
+        },
+        include: { store: true },
+      }) as any;
+    }
+
+    let store = merchant?.store;
+
+    if (!store && merchant) {
+      const user = await merchantRepository.prisma.user.findUnique({ where: { id: userId } });
+      store = await merchantRepository.prisma.store.create({
+        data: {
+          merchantId: merchant.id,
+          name: 'Aether Mart Store',
+          description: 'Fresh groceries and daily essentials at best prices.',
+          address: 'Main Market Road, Mahasamund, Chhattisgarh',
+          latitude: 21.1085,
+          longitude: 82.0965,
+          deliveryRadiusKm: 5.0,
+          openingTime: '08:00',
+          closingTime: '22:00',
+          isOpen: true,
+          isPaused: false,
+          isHoliday: false,
+          minimumOrderValue: 0,
+          deliveryFee: 0,
+          contactPhone: user?.phone || undefined,
+          contactEmail: user?.email || undefined,
+        },
+      });
+    }
+
+    return { merchant, store };
+  }
+
+  /**
+   * Retrieves all products belonging to the merchant's store.
+   */
+  public async getMerchantProducts(userId: string): Promise<any[]> {
+    const { store } = await this.getStoreProfile(userId);
+    if (!store) return [];
+
+    const products = await merchantRepository.prisma.product.findMany({
+      where: { storeId: store.id, deletedAt: null },
+      include: {
+        variants: true,
+        images: true,
+        category: true,
+        inventories: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return products;
+  }
+  /**
    * Updates merchant profile details and store settings in a transaction.
    */
   public async updateMerchantProfile(

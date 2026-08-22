@@ -264,18 +264,18 @@ export const MerchantOrders: React.FC = () => {
                   setSelectedOrderId(null);
                 }}
                 className={cn(
-                  'px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center space-x-1.5',
+                  'px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center space-x-2 cursor-pointer',
                   activeTab === tab.id
-                    ? 'bg-brand-primary text-white shadow-xs'
-                    : 'text-text-secondary hover:text-text-primary'
+                    ? 'bg-emerald-600 text-white shadow-sm font-extrabold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 )}
               >
                 <span>{tab.label}</span>
                 {count > 0 && (
                   <span
                     className={cn(
-                      'px-1.5 py-0.5 rounded-full text-[10px]',
-                      activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-surface-subtle text-text-primary'
+                      'px-2 py-0.5 rounded-full text-[10px] font-extrabold',
+                      activeTab === tab.id ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-800'
                     )}
                   >
                     {count}

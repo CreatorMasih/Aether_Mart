@@ -14,7 +14,7 @@ export const ProfileSetupScreen: React.FC = () => {
       return;
     }
 
-    if (user.fullName || user.role === 'ADMIN') {
+    if (user.isProfileComplete || user.fullName || user.role === 'ADMIN') {
       redirectToDashboard(user.role);
     }
   }, [user, navigate]);

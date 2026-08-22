@@ -59,6 +59,7 @@ export interface User {
   fullName?: string;
   email?: string;
   role: UserRole;
+  isProfileComplete?: boolean;
   walletBalance: number;
   savedAddresses: Address[];
 }

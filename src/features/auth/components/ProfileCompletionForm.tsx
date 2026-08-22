@@ -109,10 +109,13 @@ export const ProfileCompletionForm: React.FC<ProfileCompletionFormProps> = ({
       setSession(updatedUser, accessToken);
       onSetupComplete();
     } catch (error: any) {
+      const isConflict = error.status === 409 || error.code === 'ALREADY_EXISTS' || error.message?.includes('already exists');
       showToast({
         type: 'error',
-        title: 'Onboarding Failed',
-        description: error.message || 'Failed to complete profile registration.',
+        title: isConflict ? 'Account Conflict' : 'Onboarding Failed',
+        description: isConflict
+          ? 'This email address or phone number is already registered to another account.'
+          : (error.message || 'Failed to complete profile registration.'),
       });
     } finally {
       setIsLoading(false);
@@ -145,10 +148,13 @@ export const ProfileCompletionForm: React.FC<ProfileCompletionFormProps> = ({
       setSession(updatedUser, accessToken);
       onSetupComplete();
     } catch (error: any) {
+      const isConflict = error.status === 409 || error.code === 'ALREADY_EXISTS' || error.message?.includes('already exists');
       showToast({
         type: 'error',
-        title: 'Onboarding Failed',
-        description: error.message || 'Failed to complete store setup.',
+        title: isConflict ? 'Account Conflict' : 'Onboarding Failed',
+        description: isConflict
+          ? 'This email address or store name is already registered to another account.'
+          : (error.message || 'Failed to complete store setup.'),
       });
     } finally {
       setIsLoading(false);
@@ -179,10 +185,13 @@ export const ProfileCompletionForm: React.FC<ProfileCompletionFormProps> = ({
       setSession(updatedUser, accessToken);
       onSetupComplete();
     } catch (error: any) {
+      const isConflict = error.status === 409 || error.code === 'ALREADY_EXISTS' || error.message?.includes('already exists');
       showToast({
         type: 'error',
-        title: 'Onboarding Failed',
-        description: error.message || 'Failed to complete rider registration.',
+        title: isConflict ? 'Account Conflict' : 'Onboarding Failed',
+        description: isConflict
+          ? 'This email address is already registered to another user account.'
+          : (error.message || 'Failed to complete rider registration.'),
       });
     } finally {
       setIsLoading(false);

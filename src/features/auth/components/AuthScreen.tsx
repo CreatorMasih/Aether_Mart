@@ -17,10 +17,10 @@ export const AuthScreen: React.FC = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      if (!user.fullName && user.role !== 'ADMIN') {
-        navigate('/auth/profile-setup');
-      } else {
+      if (user.isProfileComplete || user.fullName || user.role === 'ADMIN') {
         redirectToDashboard(user.role);
+      } else {
+        navigate('/auth/profile-setup');
       }
     }
   }, [isAuthenticated, user, navigate]);
@@ -41,11 +41,11 @@ export const AuthScreen: React.FC = () => {
   const handleVerifySuccess = (session: { token: string; user: User }) => {
     setSession(session.user, session.token);
     
-    // Redirect to profile completed flow or setup
-    if (!session.user.fullName && session.user.role !== 'ADMIN') {
-      navigate('/auth/profile-setup');
-    } else {
+    // Redirect to dashboard if profile is complete or user is admin
+    if (session.user.isProfileComplete || session.user.fullName || session.user.role === 'ADMIN') {
       redirectToDashboard(session.user.role);
+    } else {
+      navigate('/auth/profile-setup');
     }
   };
 

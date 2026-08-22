@@ -18,7 +18,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../core/network/queryKeys';
 import { merchantService } from '../services/merchant-service';
 import { catalogService } from '../../customer-catalog/services/catalog-service';
-import { apiClient } from '../../../core/network/api-client';
 import { useToast } from '../../../hooks/useToast';
 import { formatCurrency } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
@@ -84,22 +83,16 @@ export const MerchantCatalog: React.FC = () => {
   const [hasDraft, setHasDraft] = useState(false);
 
   // 1. Queries
-  const { data: profileMe } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: async () => {
-      const res = await apiClient.get('/auth/me');
-      return res.data.data;
-    },
+  const { data: storeProfile } = useQuery({
+    queryKey: queryKeys.merchantStoreProfile(),
+    queryFn: () => merchantService.getStoreProfile(),
   });
 
-  const store = profileMe?.profile?.store;
+  const store = storeProfile?.store;
 
   const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: queryKeys.merchantProducts(store?.id || ''),
-    queryFn: async () => {
-      const res = await apiClient.get(`/products?storeId=${store.id}`);
-      return res.data.data.products;
-    },
+    queryKey: queryKeys.merchantProductsList(),
+    queryFn: () => merchantService.getProducts(),
     enabled: !!store?.id,
   });
 
@@ -206,7 +199,7 @@ export const MerchantCatalog: React.FC = () => {
     mutationFn: (params: Parameters<typeof merchantService.createProduct>[0]) =>
       merchantService.createProduct(params),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.merchantProducts(store?.id || '') });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantProductsList() });
       queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
       queryClient.invalidateQueries({ queryKey: ['homeFeed'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.products() });
@@ -234,7 +227,7 @@ export const MerchantCatalog: React.FC = () => {
   const deleteProductMutation = useMutation({
     mutationFn: (id: string) => merchantService.deleteProduct(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.merchantProducts(store?.id || '') });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantProductsList() });
       queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
       showToast({ type: 'success', title: 'Product Removed', description: 'Catalog item removed from store.' });
       setDeleteTargetId(null);
@@ -363,19 +356,19 @@ export const MerchantCatalog: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowBulkUploadModal(true)}
-            className="px-4 py-2 bg-surface border border-border hover:bg-border text-text-primary text-xs font-semibold rounded-xl transition-all flex items-center space-x-2 shadow-xs"
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-800 font-bold border border-slate-300 text-xs rounded-xl transition-all flex items-center space-x-2 shadow-xs cursor-pointer"
           >
-            <FileSpreadsheet className="w-4 h-4 text-brand-primary" />
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>Bulk Import CSV</span>
           </button>
 
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-2 shadow-sm"
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl border border-emerald-500 shadow-md transition-all flex items-center space-x-2 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Add New Product</span>
+            <span>+ Add New Product</span>
           </button>
         </div>
       </div>

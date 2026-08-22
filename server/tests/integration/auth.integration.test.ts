@@ -93,16 +93,26 @@ describe('🔐 Auth Module Integration Tests', () => {
     adminAccessToken = res.body.data.token;
   });
 
-  // 2. Reject OTP for non-ADMIN
-  it('4. Guard: OTP send request should reject non-ADMIN roles', async () => {
-    const res = await request(app)
+  // 2. Role validation tests
+  it('4. Role Validation: OTP send request should support CUSTOMER role and reject invalid role enum', async () => {
+    const validRes = await request(app)
       .post('/api/auth/send-otp')
       .send({
         identifier: 'test-customer@aethermart.com',
         type: 'EMAIL',
         role: 'CUSTOMER',
       });
-    expect(res.status).toBe(422); // Validation failure
+    expect(validRes.status).toBe(200);
+    expect(validRes.body.success).toBe(true);
+
+    const invalidRes = await request(app)
+      .post('/api/auth/send-otp')
+      .send({
+        identifier: 'test-customer@aethermart.com',
+        type: 'EMAIL',
+        role: 'INVALID_ROLE',
+      });
+    expect(invalidRes.status).toBe(422); // Validation Failure
   });
 
   // 3. New Customer Registration via Google Mock Token
@@ -150,6 +160,50 @@ describe('🔐 Auth Module Integration Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.isProfileComplete).toBe(true);
+  });
+
+  it('6b. Idempotency: Repeated complete-profile for the same user should return 200 OK without 409 error', async () => {
+    const res = await request(app)
+      .post('/api/auth/complete-profile')
+      .set('Authorization', `Bearer ${customerAccessToken}`)
+      .send({
+        role: 'CUSTOMER',
+        customerDetails: {
+          fullName: 'Integration Test Customer Updated',
+          email: 'test-new-customer@aethermart.com',
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.isProfileComplete).toBe(true);
+  });
+
+  it('6c. Security: Duplicate email belonging to ANOTHER user should return 409 Conflict', async () => {
+    // Create another customer token first
+    const newCustRes = await request(app)
+      .post('/api/auth/google-login')
+      .send({
+        token: 'mock-google-token-test-customer2@aethermart.com',
+        role: 'CUSTOMER',
+      });
+    const anotherAccessToken = newCustRes.body.data.token;
+
+    // Try completing profile using test-new-customer@aethermart.com email (which belongs to user 1)
+    const res = await request(app)
+      .post('/api/auth/complete-profile')
+      .set('Authorization', `Bearer ${anotherAccessToken}`)
+      .send({
+        role: 'CUSTOMER',
+        customerDetails: {
+          fullName: 'Another Customer',
+          email: 'test-new-customer@aethermart.com', // Conflict with user 1!
+        },
+      });
+
+    expect(res.status).toBe(409);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.message).toContain('already registered');
   });
 
   // 5. Existing Customer Login

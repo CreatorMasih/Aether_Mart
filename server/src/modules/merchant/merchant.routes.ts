@@ -9,6 +9,7 @@ const router = Router();
 router.use(authenticate);
 
 // Profile
+router.get('/profile', requireMerchant, merchantController.getProfile);
 router.put('/profile', requireMerchant, merchantController.updateProfile);
 router.patch('/profile', requireMerchant, merchantController.updateProfile);
 router.delete('/profile/:id', requireMerchantOrAdmin, merchantController.softDeleteMerchant);
@@ -18,6 +19,7 @@ router.get('/dashboard', requireMerchant, merchantController.getDashboardStats);
 router.get('/payouts', requireMerchant, merchantController.getPayouts);
 
 // Products CRUD
+router.get('/products', requireMerchant, merchantController.getProducts);
 router.post('/products', requireMerchant, merchantController.createProduct);
 router.put('/products/:id', requireMerchant, merchantController.updateProduct);
 router.delete('/products/:id', requireMerchant, merchantController.softDeleteProduct);

@@ -10,6 +10,29 @@ interface ApiEnvelope<T> {
 
 export class MerchantService extends BaseRepository {
   /**
+   * Fetches the authenticated merchant's profile and store configuration.
+   */
+  public async getStoreProfile(): Promise<{ merchant: any; store: any }> {
+    return this.executeRequest(async () => {
+      const response = await this.client.get<ApiEnvelope<{ merchant: any; store: any }>>(
+        '/merchant/profile'
+      );
+      return response.data.data;
+    });
+  }
+
+  /**
+   * Fetches all products belonging to the merchant's store.
+   */
+  public async getProducts(): Promise<Product[]> {
+    return this.executeRequest(async () => {
+      const response = await this.client.get<ApiEnvelope<Product[]>>(
+        '/merchant/products'
+      );
+      return response.data.data;
+    });
+  }
+  /**
    * Fetches dashboard statistics and analytics for the merchant's store.
    */
   public async getDashboardStats(): Promise<MerchantDashboardStats> {

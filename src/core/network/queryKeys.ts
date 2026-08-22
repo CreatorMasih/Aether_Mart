@@ -23,10 +23,12 @@ export const queryKeys = {
   orderDetail: (id: string) => ['orders', 'detail', id] as const,
 
   // ─── Merchant query keys ────────────────────────────────────────────────────
+  merchantStoreProfile: () => ['merchant', 'profile'] as const,
   merchantDashboard: () => ['merchant', 'dashboard'] as const,
   merchantOrders: () => ['merchant', 'orders'] as const,
   merchantPayouts: () => ['merchant', 'payouts'] as const,
-  merchantProducts: (storeId: string) => ['merchant', 'products', storeId] as const,
+  merchantProducts: (storeId?: string) => ['merchant', 'products', storeId ?? 'list'] as const,
+  merchantProductsList: () => ['merchant', 'products'] as const,
 
   // ─── Rider query keys ───────────────────────────────────────────────────────
   riderEarnings: () => ['rider', 'earnings'] as const,

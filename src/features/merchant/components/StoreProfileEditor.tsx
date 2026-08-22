@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../../core/network/api-client';
 import { queryKeys } from '../../../core/network/queryKeys';
+import { merchantService } from '../services/merchant-service';
 import { useToast } from '../../../hooks/useToast';
 import { cn } from '../../../utils/cn';
 
@@ -42,16 +43,13 @@ export const StoreProfileEditor: React.FC = () => {
   const circleRef = useRef<any>(null);
 
   // Queries
-  const { data: profileMe, isLoading } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: async () => {
-      const res = await apiClient.get('/auth/me');
-      return res.data.data;
-    },
+  const { data: storeProfile, isLoading } = useQuery({
+    queryKey: queryKeys.merchantStoreProfile(),
+    queryFn: () => merchantService.getStoreProfile(),
   });
 
-  const store = profileMe?.profile?.store;
-  const merchant = profileMe?.profile;
+  const store = storeProfile?.store;
+  const merchant = storeProfile?.merchant;
 
   // Form states — Section 1: General Info
   const [storeName, setStoreName] = useState('');
@@ -114,8 +112,8 @@ export const StoreProfileEditor: React.FC = () => {
       setStoreName(store.name || '');
       setDescription(store.description || '');
       setBusinessType(store.businessType || BUSINESS_TYPES[0]);
-      setContactPhone(store.contactPhone || profileMe?.phone || '');
-      setContactEmail(store.contactEmail || profileMe?.email || '');
+      setContactPhone(store.contactPhone || merchant?.user?.phone || '');
+      setContactEmail(store.contactEmail || merchant?.user?.email || '');
       setLogoUrl(store.logoUrl || '🥬');
       setBannerUrl(store.bannerUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e');
       setAddress(store.address || '');
@@ -139,7 +137,7 @@ export const StoreProfileEditor: React.FC = () => {
       setBankAccount(merchant.bankAccount || '');
       setBankName(merchant.bankName || '');
     }
-  }, [store, merchant, profileMe]);
+  }, [store, merchant]);
 
   // Onboarding Setup Checklist Math
   const tasks = [
@@ -316,18 +314,18 @@ export const StoreProfileEditor: React.FC = () => {
 
   const updateStoreMutation = useMutation({
     mutationFn: async (payload: any) => {
-      const res = await apiClient.put('/merchant/profile', payload);
-      return res.data.data;
+      return merchantService.updateProfile(payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantStoreProfile() });
       queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantProducts() });
       queryClient.invalidateQueries({ queryKey: ['homeFeed'] });
       queryClient.invalidateQueries({ queryKey: ['stores'] });
       showToast({
         type: 'success',
         title: 'Store Profile Saved! 🏬',
-        description: 'Store details, interactive location, radius coverage, and operating hours updated.',
+        description: 'Store details, location, radius coverage, and operating hours updated.',
       });
     },
     onError: (err: any) => {
@@ -408,7 +406,7 @@ export const StoreProfileEditor: React.FC = () => {
             type="button"
             onClick={() => handleSubmit()}
             disabled={updateStoreMutation.isPending}
-            className="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center space-x-2 disabled:opacity-50"
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-extrabold rounded-xl border border-emerald-500 shadow-md transition-all flex items-center space-x-2 cursor-pointer disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             <span>{updateStoreMutation.isPending ? 'Saving...' : 'Save Profile Changes'}</span>
@@ -417,27 +415,27 @@ export const StoreProfileEditor: React.FC = () => {
       </div>
 
       {/* Onboarding Completion Progress */}
-      <div className="p-4 bg-gradient-to-r from-brand-primary/10 to-accent-teal/10 border border-brand-primary/20 rounded-2xl space-y-3">
+      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-text-primary flex items-center space-x-1.5">
-            <Sparkles className="w-4 h-4 text-brand-primary" />
+          <span className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+            <Sparkles className="w-4 h-4 text-emerald-600" />
             <span>Store Onboarding Setup Checklist</span>
           </span>
-          <span className="text-xs font-extrabold text-brand-primary bg-surface px-3 py-1 rounded-xl border border-brand-primary/30 shadow-xs">
+          <span className="text-xs font-extrabold text-emerald-700 bg-white px-3 py-1 rounded-xl border border-emerald-300 shadow-xs">
             {completionPercentage}% Configured
           </span>
         </div>
 
-        <div className="w-full bg-surface/80 rounded-full h-2 overflow-hidden border border-border">
+        <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
           <div
-            className="bg-brand-primary h-full transition-all duration-500 rounded-full"
+            className="bg-emerald-600 h-full transition-all duration-500 rounded-full"
             style={{ width: `${completionPercentage}%` }}
           />
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex overflow-x-auto border-b border-border bg-surface rounded-2xl p-1.5 gap-1 shadow-xs">
+      <div className="flex overflow-x-auto border border-slate-200 bg-white rounded-2xl p-1.5 gap-1 shadow-xs">
         {[
           { id: 'GENERAL', label: '1. General Info', icon: StoreIcon },
           { id: 'LOCATION', label: '2. Location & Map', icon: MapPin },
@@ -452,10 +450,10 @@ export const StoreProfileEditor: React.FC = () => {
               type="button"
               onClick={() => setActiveTab(tab.id as any)}
               className={cn(
-                'px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center space-x-2',
+                'px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center space-x-2 cursor-pointer',
                 activeTab === tab.id
-                  ? 'bg-brand-primary text-white shadow-xs'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-subtle'
+                  ? 'bg-emerald-600 text-white shadow-sm font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               )}
             >
               <Icon className="w-4 h-4" />
@@ -599,7 +597,7 @@ export const StoreProfileEditor: React.FC = () => {
                 type="button"
                 onClick={handleDetectGPS}
                 disabled={isGPSDetecting}
-                className="px-3.5 py-2 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-xs font-bold rounded-xl border border-brand-primary/30 transition-all flex items-center space-x-1.5 self-start sm:self-auto"
+                className="px-4 py-2 bg-white hover:bg-emerald-50 text-emerald-700 text-xs font-extrabold rounded-xl border-2 border-emerald-300 transition-all flex items-center space-x-1.5 self-start sm:self-auto cursor-pointer shadow-xs"
               >
                 <Navigation className="w-4 h-4" />
                 <span>{isGPSDetecting ? 'Detecting GPS...' : 'Use Current GPS'}</span>

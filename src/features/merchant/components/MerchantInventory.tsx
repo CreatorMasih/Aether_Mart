@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../core/network/queryKeys';
-import { apiClient } from '../../../core/network/api-client';
+import { merchantService } from '../services/merchant-service';
 import { useToast } from '../../../hooks/useToast';
 import { formatCurrency } from '../../../utils/formatters';
 import { cn } from '../../../utils/cn';
@@ -50,22 +50,16 @@ export const MerchantInventory: React.FC = () => {
   const [adjustReason, setAdjustReason] = useState('STOCK_RECEIVED');
 
   // 1. Queries
-  const { data: profileMe } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: async () => {
-      const res = await apiClient.get('/auth/me');
-      return res.data.data;
-    },
+  const { data: storeProfile } = useQuery({
+    queryKey: queryKeys.merchantStoreProfile(),
+    queryFn: () => merchantService.getStoreProfile(),
   });
 
-  const store = profileMe?.profile?.store;
+  const store = storeProfile?.store;
 
   const { data: productsData, isLoading } = useQuery({
-    queryKey: queryKeys.merchantProducts(store?.id || ''),
-    queryFn: async () => {
-      const res = await apiClient.get(`/products?storeId=${store.id}`);
-      return res.data.data.products;
-    },
+    queryKey: queryKeys.merchantProductsList(),
+    queryFn: () => merchantService.getProducts(),
     enabled: !!store?.id,
   });
 
@@ -117,17 +111,7 @@ export const MerchantInventory: React.FC = () => {
     const delta = adjustType === 'ADD' ? Number(adjustQty) : -Number(adjustQty);
     const newQty = Math.max(0, adjustTarget.stockQty + delta);
 
-    // Optimistically update products cache
-    queryClient.setQueryData(queryKeys.merchantProducts(store?.id || ''), (oldData: any) => {
-      if (!oldData) return oldData;
-      return oldData.map((p: any) => {
-        if (p.id === adjustTarget.productId) {
-          const updatedVariants = p.variants?.map((v: any) => ({ ...v, stock: newQty }));
-          return { ...p, stock: newQty, variants: updatedVariants };
-        }
-        return p;
-      });
-    });
+    queryClient.invalidateQueries({ queryKey: queryKeys.merchantProductsList() });
 
     showToast({
       type: 'success',
