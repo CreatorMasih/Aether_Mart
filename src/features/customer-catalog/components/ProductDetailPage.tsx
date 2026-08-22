@@ -158,9 +158,9 @@ export const ProductDetailPage: React.FC = () => {
 
   const bundleProduct = boughtTogether?.[0] || null;
 
-  // Dynamic rating summary computed from reviews
+  // Dynamic rating summary computed from real database reviews
   const avgRating = useMemo(() => {
-    if (reviews.length === 0) return 5.0;
+    if (reviews.length === 0) return null;
     const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
     return parseFloat((sum / reviews.length).toFixed(1));
   }, [reviews]);
@@ -630,13 +630,22 @@ export const ProductDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Overall breakdown card */}
           <div className="p-4 rounded-2xl border border-border-primary bg-bg-secondary flex flex-col items-center justify-center text-center">
-            <span className="text-4xl font-extrabold text-text-primary font-heading">{avgRating}</span>
-            <div className="flex items-center gap-0.5 text-status-warning mt-1.5">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star key={star} className={cn("h-4 w-4", star <= Math.round(avgRating) ? "fill-status-warning text-status-warning" : "text-border-primary")} />
-              ))}
-            </div>
-            <p className="text-[10px] text-text-secondary font-bold mt-2 uppercase tracking-wider">{reviewsCount} customer reviews</p>
+            {avgRating !== null ? (
+              <>
+                <span className="text-4xl font-extrabold text-text-primary font-heading">{avgRating}</span>
+                <div className="flex items-center gap-0.5 text-status-warning mt-1.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star key={star} className={cn("h-4 w-4", star <= Math.round(avgRating) ? "fill-status-warning text-status-warning" : "text-border-primary")} />
+                  ))}
+                </div>
+                <p className="text-[10px] text-text-secondary font-bold mt-2 uppercase tracking-wider">{reviewsCount} customer reviews</p>
+              </>
+            ) : (
+              <>
+                <span className="text-2xl font-extrabold text-brand-emerald font-heading">New Item</span>
+                <p className="text-[10px] text-text-secondary font-bold mt-1 uppercase tracking-wider">No reviews yet</p>
+              </>
+            )}
           </div>
 
           {/* Rating distribution chart */}

@@ -54,6 +54,15 @@ export const NotServiceableState: React.FC<NotServiceableStateProps> = ({
           <span>Deliver to Mahasamund (493445)</span>
           <ArrowRight className="h-3.5 w-3.5 text-text-secondary" />
         </button>
+
+        <button
+          onClick={() => {
+            alert('We will notify you as soon as Aether Mart launches in your locality! 🚀');
+          }}
+          className="w-full py-2.5 px-4 rounded-xl border border-brand-emerald/30 bg-brand-emerald/5 text-brand-emerald font-bold text-xs transition-all cursor-pointer"
+        >
+          🔔 Notify Me When Available
+        </button>
       </div>
 
       <div className="p-3 rounded-xl bg-bg-tertiary border border-border-primary text-left text-[11px] text-text-secondary space-y-1 w-full">

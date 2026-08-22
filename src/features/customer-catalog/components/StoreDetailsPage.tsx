@@ -176,7 +176,7 @@ export const StoreDetailsPage: React.FC = () => {
               <Star className="h-4 w-4 text-status-warning fill-status-warning shrink-0" />
               <div>
                 <p className="text-[9px] text-text-secondary font-bold uppercase">Rating & Radius</p>
-                <p className="text-text-primary font-bold">{store.rating || 4.8} ★ ({store.deliveryRadiusKm || 10} km radius)</p>
+                <p className="text-text-primary font-bold">{store.rating && store.rating > 0 ? `${store.rating} ★` : 'New Store'} ({store.deliveryRadiusKm || 5} km radius)</p>
               </div>
             </div>
           </div>

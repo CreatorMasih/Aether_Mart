@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { History, MapPin, Sparkles, Star, Milk, Pill, Apple, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -12,11 +12,45 @@ import { StoreCardGrid } from './StoreCardGrid';
 import { pageTransition } from '../../../core/theme/animations';
 import { NotServiceableState } from '../../../components/ui/NotServiceableState';
 import { LocationPickerModal } from '../../../components/ui/LocationPickerModal';
-
+import { DEFAULT_MAHASAMUND_ADDRESS, checkLocationServiceability } from '../../../core/config/serviceability';
 
 export const HomeScreen: React.FC = () => {
-  const { recentlyViewed, selectedAddress } = useCustomerStore();
+  const { recentlyViewed, selectedAddress, setSelectedAddress } = useCustomerStore();
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+
+  // Auto-resolve location on mount if not selected
+  useEffect(() => {
+    if (!selectedAddress) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const res = checkLocationServiceability({ latitude: lat, longitude: lng });
+            if (res.isServiceable) {
+              setSelectedAddress({
+                ...DEFAULT_MAHASAMUND_ADDRESS,
+                coordinates: { latitude: lat, longitude: lng },
+                isServiceable: true,
+              });
+            } else {
+              setSelectedAddress({
+                ...DEFAULT_MAHASAMUND_ADDRESS,
+                city: 'Outside Service Area',
+                coordinates: { latitude: lat, longitude: lng },
+                isServiceable: false,
+              });
+            }
+          },
+          () => {
+            setSelectedAddress(DEFAULT_MAHASAMUND_ADDRESS);
+          }
+        );
+      } else {
+        setSelectedAddress(DEFAULT_MAHASAMUND_ADDRESS);
+      }
+    }
+  }, [selectedAddress, setSelectedAddress]);
 
   const lat = selectedAddress?.coordinates?.latitude;
   const lng = selectedAddress?.coordinates?.longitude;
@@ -191,10 +225,10 @@ export const HomeScreen: React.FC = () => {
         </section>
       )}
 
-      {/* 8. ⭐ Top Rated Products */}
+      {/* 8. ⭐ Top Picks for You */}
       {feed.recommendedProducts.length > 0 && (
         <section>
-          {renderSectionHeader(<Star className="h-5 w-5 fill-status-warning text-status-warning" />, 'Top Rated Products', 'Favorites with 4.8+ user reviews')}
+          {renderSectionHeader(<Star className="h-5 w-5 fill-status-warning text-status-warning" />, 'Top Picks for You', 'Fresh daily essentials from local stores')}
           <ProductCardGrid products={feed.recommendedProducts} />
         </section>
       )}
