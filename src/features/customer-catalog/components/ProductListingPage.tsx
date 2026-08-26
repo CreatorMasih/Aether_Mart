@@ -235,7 +235,7 @@ export const ProductListingPage: React.FC = () => {
             {pageTitle}
           </h1>
           <p className="text-xs text-text-secondary mt-0.5 font-semibold">
-            {pageData?.total || 0} items found
+            {accumulatedProducts.length} {accumulatedProducts.length === 1 ? 'item' : 'items'} found
           </p>
         </div>
 

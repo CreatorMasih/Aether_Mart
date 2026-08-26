@@ -1,0 +1,26 @@
+# Aether Mart Robots.txt
+User-agent: *
+Allow: /
+Allow: /mahasamund-delivery
+Allow: /categories
+Allow: /food-delivery-mahasamund
+Allow: /grocery-delivery-mahasamund
+Allow: /medicine-delivery-mahasamund
+Allow: /daily-essentials-mahasamund
+Allow: /personal-care-mahasamund
+Allow: /stores/
+Allow: /products/
+
+# Protect Private & Authenticated Routes from Crawlers
+Disallow: /auth/
+Disallow: /c/checkout
+Disallow: /c/cart
+Disallow: /c/orders
+Disallow: /c/profile
+Disallow: /c/account
+Disallow: /m/
+Disallow: /r/
+Disallow: /a/
+Disallow: /api/
+
+Sitemap: https://aether-mart-six.vercel.app/sitemap.xml

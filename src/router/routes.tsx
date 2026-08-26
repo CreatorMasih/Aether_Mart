@@ -39,6 +39,9 @@ const OrderConfirmationPage = lazy(() => import('../features/customer-checkout/c
 const LiveOrderTrackingPage = lazy(() => import('../features/customer-checkout/components/LiveOrderTrackingPage'));
 const CustomerDashboardPage = lazy(() => import('../features/customer-catalog/components/CustomerDashboardPage'));
 
+const MahasamundLandingPage = lazy(() => import('../features/public-seo/pages/MahasamundLandingPage').then((m) => ({ default: m.MahasamundLandingPage })));
+const CategoryLandingPage = lazy(() => import('../features/public-seo/pages/CategoryLandingPage').then((m) => ({ default: m.CategoryLandingPage })));
+
 const MerchantDashboard = lazy(() => import('../features/merchant/components/MerchantDashboard').then((m) => ({ default: m.MerchantDashboard })));
 const MerchantOrders = lazy(() => import('../features/merchant/components/MerchantOrders').then((m) => ({ default: m.MerchantOrders })));
 const MerchantCatalog = lazy(() => import('../features/merchant/components/MerchantCatalog').then((m) => ({ default: m.MerchantCatalog })));
@@ -106,6 +109,36 @@ export const routes: RouteObject[] = [
       {
         path: '/auth/profile-setup',
         element: withSuspense(ProfileSetupScreen),
+      },
+
+      // Public Crawlable SEO Routes
+      {
+        path: '/mahasamund-delivery',
+        element: withSuspense(MahasamundLandingPage),
+      },
+      {
+        path: '/categories',
+        element: withSuspense(ProductListingPage),
+      },
+      {
+        path: '/food-delivery-mahasamund',
+        element: withSuspense(CategoryLandingPage),
+      },
+      {
+        path: '/grocery-delivery-mahasamund',
+        element: withSuspense(CategoryLandingPage),
+      },
+      {
+        path: '/medicine-delivery-mahasamund',
+        element: withSuspense(CategoryLandingPage),
+      },
+      {
+        path: '/daily-essentials-mahasamund',
+        element: withSuspense(CategoryLandingPage),
+      },
+      {
+        path: '/personal-care-mahasamund',
+        element: withSuspense(CategoryLandingPage),
       },
       
       // Customer Protected Routes

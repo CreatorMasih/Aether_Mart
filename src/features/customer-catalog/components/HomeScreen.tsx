@@ -11,6 +11,7 @@ import { StoreCardGrid } from './StoreCardGrid';
 import { pageTransition } from '../../../core/theme/animations';
 import { NotServiceableState } from '../../../components/ui/NotServiceableState';
 import { DEFAULT_MAHASAMUND_ADDRESS, checkLocationServiceability } from '../../../core/config/serviceability';
+import { SEOHead } from '../../../components/seo/SEOHead';
 
 export const HomeScreen: React.FC = () => {
   const { recentlyViewed, selectedAddress, setSelectedAddress } = useCustomerStore();
@@ -148,34 +149,40 @@ export const HomeScreen: React.FC = () => {
   const feed = homeFeed!;
 
   return (
-    <motion.div
-      variants={pageTransition}
-      initial="initial"
-      animate="animate"
-      className="space-y-8 pb-12"
-    >
-      {/* 1. CUSTOMER HERO SECTION (Matching Reference Design Target) */}
-      <section aria-label="Hero Banner" className="select-none">
-        <div className="relative w-full rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-6 sm:p-8 text-white overflow-hidden shadow-lg border border-emerald-700/40">
-          {/* Decorative radial gradients */}
-          <div className="absolute -top-12 -right-12 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
+    <>
+      <SEOHead
+        title="Aether Mart | Hyperlocal Delivery in Mahasamund"
+        description="Aether Mart brings food, groceries, medicines, daily essentials and more to your doorstep in Mahasamund, Chhattisgarh from trusted local businesses."
+        canonicalUrl="https://aether-mart-six.vercel.app/c/home"
+      />
+      <motion.div
+        variants={pageTransition}
+        initial="initial"
+        animate="animate"
+        className="space-y-8 pb-12"
+      >
+        {/* 1. CUSTOMER HERO SECTION (Matching Reference Design Target) */}
+        <section aria-label="Hero Banner" className="select-none">
+          <div className="relative w-full rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-6 sm:p-8 text-white overflow-hidden shadow-lg border border-emerald-700/40">
+            {/* Decorative radial gradients */}
+            <div className="absolute -top-12 -right-12 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-            {/* Left Content Column */}
-            <div className="space-y-4 max-w-xl text-center md:text-left">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-emerald-200 text-xs font-bold font-heading">
-                <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
-                <span>10-30 mins delivery in Mahasamund</span>
-              </div>
+            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+              {/* Left Content Column */}
+              <div className="space-y-4 max-w-xl text-center md:text-left">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-emerald-200 text-xs font-bold font-heading">
+                  <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
+                  <span>10-30 mins delivery in Mahasamund</span>
+                </div>
 
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight font-heading leading-tight text-white">
-                Fresh groceries, delivered fast at your doorstep
-              </h1>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight font-heading leading-tight text-white">
+                  Everything you need, delivered locally in Mahasamund
+                </h1>
 
-              <p className="text-xs sm:text-sm text-emerald-100/90 font-medium leading-relaxed max-w-md">
-                Best quality products from trusted local stores in Mahasamund. Daily essentials, fresh produce, dairy & more.
-              </p>
+                <p className="text-xs sm:text-sm text-emerald-100/90 font-medium leading-relaxed max-w-md">
+                  Order food, groceries, medicines, daily essentials and more from trusted local stores and businesses in Mahasamund.
+                </p>
 
               {/* Service Highlight Badges */}
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1">
@@ -225,9 +232,11 @@ export const HomeScreen: React.FC = () => {
             <StoreCardGrid stores={feed.nearbyStores} />
           </div>
         ) : (
-          <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 text-center space-y-2">
-            <h3 className="text-xs font-bold text-slate-700">Connecting to Mahasamund Stores...</h3>
-            <p className="text-[11px] text-slate-500">Checking nearest store availability in Mahasamund.</p>
+          <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 text-center space-y-2 select-none">
+            <h3 className="text-xs font-bold text-slate-800">No stores available nearby yet</h3>
+            <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+              More local Mahasamund stores are coming soon. Explore our top daily picks below.
+            </p>
           </div>
         )}
       </section>
@@ -280,6 +289,7 @@ export const HomeScreen: React.FC = () => {
         </section>
       )}
     </motion.div>
+    </>
   );
 };
 

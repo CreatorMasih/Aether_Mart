@@ -242,14 +242,23 @@ export class CatalogService extends BaseRepository {
     });
   }
 
-  /** Returns the authenticated customer's wishlist */
+  /** Returns the authenticated customer's wishlist (or empty array for guests/401) */
   public async getWishlist(): Promise<CatalogProduct[]> {
+    const token = (await import('../../../features/auth/store/auth-store')).useAuthStore.getState().accessToken;
+    if (!token) return [];
+
     return this.executeRequest(async () => {
-      const response =
-        await this.client.get<ApiEnvelope<unknown[]>>('/customer/wishlist');
-      return (response.data.data ?? []).map((p) =>
-        mapProductDto(p as Parameters<typeof mapProductDto>[0]),
-      );
+      try {
+        const response = await this.client.get<ApiEnvelope<unknown[]>>('/customer/wishlist');
+        return (response.data.data ?? []).map((p) =>
+          mapProductDto(p as Parameters<typeof mapProductDto>[0]),
+        );
+      } catch (err: any) {
+        if (err?.status === 401 || err?.code === 'UNAUTHORIZED') {
+          return [];
+        }
+        return [];
+      }
     });
   }
 

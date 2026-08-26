@@ -37,44 +37,31 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     
-    // Do not attempt token refresh for auth endpoints to prevent loops
+    // Exclude auth & session endpoints to prevent infinite refresh loops
     const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || 
                            originalRequest?.url?.includes('/auth/verify-otp') ||
                            originalRequest?.url?.includes('/auth/google-login') ||
-                           originalRequest?.url?.includes('/auth/refresh');
+                           originalRequest?.url?.includes('/auth/refresh') ||
+                           originalRequest?.url?.includes('/auth/logout') ||
+                           originalRequest?.url?.includes('/auth/me');
 
-    // Check if error is 401 (Unauthorized) and we haven't retried yet
+    // Handle 401 Unauthorized with single retry-once refresh flow
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
       
       try {
-        // Enforce session refresh endpoint request
         const response = await axios.post(
           `${API_BASE_URL}/auth/refresh`,
           {},
-          { withCredentials: true } // Cookie contains the refresh token
+          { withCredentials: true }
         );
         
         const newAccessToken = (response.data as any)?.data?.accessToken || (response.data as any)?.accessToken;
         const currentUser = useAuthStore.getState().user;
         
         if (newAccessToken) {
-          // Fetch fresh user profile from backend to ensure strict role and session alignment
-          try {
-            const meRes = await axios.get(`${API_BASE_URL}/auth/me`, {
-              headers: { Authorization: `Bearer ${newAccessToken}` },
-              withCredentials: true,
-            });
-            const freshUser = meRes.data?.data;
-            if (freshUser) {
-              useAuthStore.getState().setSession(freshUser, newAccessToken);
-            } else if (currentUser) {
-              useAuthStore.getState().setSession(currentUser, newAccessToken);
-            }
-          } catch {
-            if (currentUser) {
-              useAuthStore.getState().setSession(currentUser, newAccessToken);
-            }
+          if (currentUser) {
+            useAuthStore.getState().setSession(currentUser, newAccessToken);
           }
           
           if (originalRequest.headers) {
@@ -83,9 +70,13 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        // Refresh token failed -> Force user logout
+        // Refresh token invalid/expired -> Clear session safely without forced redirect loop
+        const wasAuth = useAuthStore.getState().isAuthenticated;
         useAuthStore.getState().clearSession();
-        window.location.href = '/auth';
+        
+        if (wasAuth && !window.location.pathname.startsWith('/c/')) {
+          window.location.href = '/auth';
+        }
         return Promise.reject(refreshError);
       }
     }

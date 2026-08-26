@@ -10,6 +10,40 @@ const router = Router();
 // ── System ────────────────────────────────────────────────────────────────────
 router.use('/', healthRouter);
 
+// ── SEO Public Infrastructure Endpoints ─────────────────────────────────────
+router.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+Allow: /mahasamund-delivery
+Allow: /categories
+Allow: /food-delivery-mahasamund
+Allow: /grocery-delivery-mahasamund
+Allow: /medicine-delivery-mahasamund
+Allow: /daily-essentials-mahasamund
+Disallow: /auth/
+Disallow: /c/checkout
+Disallow: /c/cart
+Disallow: /m/
+Disallow: /r/
+Disallow: /a/
+
+Sitemap: https://aether-mart-six.vercel.app/sitemap.xml`);
+});
+
+router.get('/sitemap.xml', (_req, res) => {
+  res.type('application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://aether-mart-six.vercel.app/</loc><priority>1.0</priority></url>
+  <url><loc>https://aether-mart-six.vercel.app/mahasamund-delivery</loc><priority>0.9</priority></url>
+  <url><loc>https://aether-mart-six.vercel.app/categories</loc><priority>0.8</priority></url>
+  <url><loc>https://aether-mart-six.vercel.app/food-delivery-mahasamund</loc><priority>0.8</priority></url>
+  <url><loc>https://aether-mart-six.vercel.app/grocery-delivery-mahasamund</loc><priority>0.8</priority></url>
+  <url><loc>https://aether-mart-six.vercel.app/medicine-delivery-mahasamund</loc><priority>0.8</priority></url>
+</urlset>`);
+});
+
 // ── Auth (Phase 3) ────────────────────────────────────────────────────────────
 import authRoutes from '../../modules/auth/auth.routes';
 import { authController } from '../../modules/auth/auth.controller';
