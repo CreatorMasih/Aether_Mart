@@ -88,6 +88,16 @@ export function useCartMutations() {
       rollback(context?.snapshot);
       const err = parseApiError(_err);
 
+      if (err.code === 'TOKEN_MISSING' || err.status === 401) {
+        showToast({
+          type: 'info',
+          title: 'Login Required',
+          description: 'Please log in to add items to your cart.',
+        });
+        window.location.href = '/auth';
+        return;
+      }
+
       if (err.code === 'STORE_CONFLICT') {
         useModalStore.getState().openModal('CONFIRM', {
           title: 'Your cart contains items from another store',

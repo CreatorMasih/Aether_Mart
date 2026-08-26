@@ -433,6 +433,16 @@ export const CheckoutPage: React.FC = () => {
       let title = 'Order Failed';
       let description = parsed.message;
 
+      if (parsed.code === 'TOKEN_MISSING' || parsed.status === 401) {
+        showToast({
+          type: 'info',
+          title: 'Session Expired',
+          description: 'Please log in to complete your order.',
+        });
+        navigate('/auth', { replace: true });
+        return;
+      }
+
       switch (parsed.code) {
         case 'OUT_OF_STOCK':
           title = 'Out of Stock';

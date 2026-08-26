@@ -60,6 +60,25 @@ export const parseApiError = (error: unknown): AppError => {
     };
   }
 
+  // Handle custom mapped API error objects
+  if (error && typeof error === 'object' && 'code' in error) {
+    const customErr = error as any;
+    if (customErr.code === 'TOKEN_MISSING' || customErr.status === 401) {
+      return {
+        message: 'Please log in to continue.',
+        status: 401,
+        code: 'TOKEN_MISSING',
+        details: customErr.details,
+      };
+    }
+    return {
+      message: customErr.message || 'A network error occurred. Please check your connection.',
+      status: customErr.status || 500,
+      code: customErr.code || 'API_ERROR',
+      details: customErr.details,
+    };
+  }
+
   const standardError = error instanceof Error ? error : new Error('An unknown error occurred.');
   return {
     message: standardError.message,
