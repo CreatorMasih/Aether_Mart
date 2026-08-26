@@ -86,16 +86,17 @@ export class CartService {
       cart = await cartRepository.createCart(customerId, product.storeId);
     }
 
-    // 2. Single-Store cart constraint:
-    if (cart.storeId && cart.storeId !== product.storeId && cart.items.length > 0) {
+    // 2. Single-Store cart constraint: only block if cart has active items from a different store
+    const hasItems = cart.items && cart.items.length > 0;
+    if (cart.storeId && cart.storeId !== product.storeId && hasItems) {
       throw new BadRequestError(
         `Your cart contains items from another store (${cart.store?.name || 'Another Store'}). Please clear your cart first.`,
         ErrorCodes.STORE_CONFLICT
       );
     }
 
-    // If cart storeId is null or empty, link it to the product's store
-    if (cart.storeId !== product.storeId) {
+    // If cart storeId is missing, empty, or changing after clear, update it to the product's store
+    if (!cart.storeId || !hasItems || cart.storeId !== product.storeId) {
       await cartRepository.updateCartStore(cart.id, product.storeId);
     }
 

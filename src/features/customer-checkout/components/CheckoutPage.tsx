@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
 import {
   MapPin,
@@ -105,7 +105,8 @@ export const CheckoutPage: React.FC = () => {
   // State passed from cart drawer
   const locationState = (location.state ?? {}) as CheckoutLocationState;
 
-  const { clearCart } = useCartMutations();
+  const queryClient = useQueryClient();
+  const { invalidateCart } = useCartMutations();
   const { setSelectedAddress: setStoreSelectedAddress } = useCustomerStore();
 
   // ─── Address selection from real backend PostgreSQL APIs ──────────────────
@@ -276,7 +277,23 @@ export const CheckoutPage: React.FC = () => {
       sessionStorage.removeItem('aether_pending_order');
 
       if (status === 'SUCCESS') {
-        clearCart();
+        queryClient.setQueryData(queryKeys.cart(), {
+          id: null,
+          store: null,
+          items: [],
+          subtotal: 0,
+          discount: 0,
+          tax: 0,
+          packagingFee: 0,
+          handlingFee: 0,
+          deliveryFee: 0,
+          surgeFee: 0,
+          driverTip: 0,
+          ecoPackaging: false,
+          totalAmount: 0,
+          coupon: null,
+        });
+        invalidateCart();
         showToast({
           type: 'success',
           title: 'Payment Successful!',
@@ -382,7 +399,23 @@ export const CheckoutPage: React.FC = () => {
       if (paymentMethod === 'RAZORPAY') {
         triggerRazorpayCheckout(primaryOrder);
       } else {
-        clearCart();
+        queryClient.setQueryData(queryKeys.cart(), {
+          id: null,
+          store: null,
+          items: [],
+          subtotal: 0,
+          discount: 0,
+          tax: 0,
+          packagingFee: 0,
+          handlingFee: 0,
+          deliveryFee: 0,
+          surgeFee: 0,
+          driverTip: 0,
+          ecoPackaging: false,
+          totalAmount: 0,
+          coupon: null,
+        });
+        invalidateCart();
         sessionStorage.removeItem('aether_pending_order');
         showToast({
           type: 'success',
