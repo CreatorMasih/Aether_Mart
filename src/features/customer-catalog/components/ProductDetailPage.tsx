@@ -152,7 +152,7 @@ export const ProductDetailPage: React.FC = () => {
   const activeWeight = selectedVariant ? selectedVariant.weightGrams : (product?.weightGrams || 0);
 
   const cartItem = cartItems.find(
-    (item) => item.productId === product?.id && item.variantId === (selectedVariant?.id ?? null)
+    (item) => item.productId === product?.id && (selectedVariant?.id ? (item.variantId === selectedVariant.id || !item.variantId) : (!item.variantId || !selectedVariant))
   );
   const quantity = cartItem?.quantity || 0;
 

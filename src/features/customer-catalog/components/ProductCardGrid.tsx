@@ -28,8 +28,12 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
       {products.map((product) => {
         const isWishlisted = wishlist.some((item) => item.id === product.id);
-        const cartItem = cartItems.find((item) => item.productId === product.id && !item.variantId);
+        const defaultVariantId = product.variants?.[0]?.id || null;
+        const cartItem = cartItems.find((item) =>
+          item.productId === product.id && (defaultVariantId ? (item.variantId === defaultVariantId || !item.variantId) : !item.variantId)
+        );
         const quantity = cartItem?.quantity || 0;
+        const targetVariantId = cartItem?.variantId || defaultVariantId || undefined;
 
         const effectivePrice = product.discountPrice ?? product.price;
         const showMRP = product.discountPrice !== undefined && product.discountPrice < product.price;
@@ -113,7 +117,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
               {quantity > 0 ? (
                 <div className="flex items-center gap-2 bg-brand-emerald text-white rounded-lg px-2 py-1 shadow-subtle border border-brand-emerald-hover">
                   <button
-                    onClick={() => updateQuantity({ productId: product.id, quantity: quantity - 1 })}
+                    onClick={() => updateQuantity({ productId: product.id, variantId: targetVariantId, quantity: quantity - 1 })}
                     className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"
                     aria-label="Decrease quantity"
                   >
@@ -121,7 +125,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
                   </button>
                   <span className="text-xs font-extrabold font-heading min-w-4 text-center">{quantity}</span>
                   <button
-                    onClick={() => updateQuantity({ productId: product.id, quantity: quantity + 1 })}
+                    onClick={() => updateQuantity({ productId: product.id, variantId: targetVariantId, quantity: quantity + 1 })}
                     className="p-0.5 hover:bg-brand-emerald-hover rounded cursor-pointer"
                     aria-label="Increase quantity"
                   >
@@ -133,7 +137,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
                   variants={buttonPress}
                   whileTap="whileTap"
                   whileHover="whileHover"
-                  onClick={() => addToCart({ productId: product.id, quantity: 1 })}
+                  onClick={() => addToCart({ productId: product.id, variantId: targetVariantId, quantity: 1 })}
                   className="px-3 py-1.5 rounded-lg border border-brand-emerald/40 hover:border-brand-emerald bg-bg-secondary text-brand-emerald hover:bg-brand-emerald/5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
                 >
                   <Plus className="h-3 w-3" />

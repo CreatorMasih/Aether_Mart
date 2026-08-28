@@ -31,14 +31,13 @@ export class CatalogRepository extends BaseRepository {
       where: {
         ...params.where,
         deletedAt: null,
+        isActive: true,
         store: {
           isOpen: true,
           isPaused: false,
           isHoliday: false,
-          NOT: {
-            name: {
-              contains: 'Test Store',
-            },
+          merchant: {
+            isApproved: true,
           },
         },
       },
@@ -67,14 +66,13 @@ export class CatalogRepository extends BaseRepository {
       where: {
         ...where,
         deletedAt: null,
+        isActive: true,
         store: {
           isOpen: true,
           isPaused: false,
           isHoliday: false,
-          NOT: {
-            name: {
-              contains: 'Test Store',
-            },
+          merchant: {
+            isApproved: true,
           },
         },
       },
@@ -282,10 +280,8 @@ export class CatalogRepository extends BaseRepository {
             isOpen: true,
             isPaused: false,
             isHoliday: false,
-            NOT: {
-              name: {
-                contains: 'Test Store',
-              },
+            merchant: {
+              isApproved: true,
             },
           }
         : {},
@@ -313,10 +309,8 @@ export class CatalogRepository extends BaseRepository {
           isOpen: true,
           isPaused: false,
           isHoliday: false,
-          NOT: {
-            name: {
-              contains: 'Test Store',
-            },
+          merchant: {
+            isApproved: true,
           },
         },
       },

@@ -53,7 +53,7 @@ export function useCartMutations() {
       // Optimistic: increment quantity or add new item
       const current = snapshot ?? emptyCart();
       const existingIdx = current.items.findIndex(
-        (i) => i.productId === productId && i.variantId === (variantId ?? null),
+        (i) => i.productId === productId && (variantId ? (i.variantId === variantId || !i.variantId) : true),
       );
 
       let optimisticItems = [...current.items];
@@ -161,7 +161,8 @@ export function useCartMutations() {
       const current = snapshot ?? emptyCart();
       let optimisticItems = current.items
         .map((item) => {
-          if (item.productId === productId && item.variantId === (variantId ?? null)) {
+          const match = item.productId === productId && (variantId ? (item.variantId === variantId || !item.variantId) : true);
+          if (match) {
             return { ...item, quantity, total: item.price * quantity };
           }
           return item;
@@ -206,7 +207,7 @@ export function useCartMutations() {
         ...current,
         items: current.items.filter(
           (item) =>
-            !(item.productId === productId && item.variantId === (variantId ?? null)),
+            !(item.productId === productId && (variantId ? (item.variantId === variantId || !item.variantId) : true)),
         ),
       });
 
