@@ -118,10 +118,12 @@ export class OrderService {
 
         if (process.env.NODE_ENV !== 'test') {
           const now = new Date();
-          const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+          const istOffsetMs = 5.5 * 60 * 60 * 1000;
+          const istDate = new Date(now.getTime() + istOffsetMs);
+          const currentTimeStr = `${istDate.getUTCHours().toString().padStart(2, '0')}:${istDate.getUTCMinutes().toString().padStart(2, '0')}`;
           if (currentTimeStr < store.openingTime || currentTimeStr > store.closingTime) {
             throw new BadRequestError(
-              `Store '${store.name}' is currently closed. Operating hours: ${store.openingTime} to ${store.closingTime}.`,
+              `Store '${store.name}' is currently closed. Operating hours (IST): ${store.openingTime} to ${store.closingTime}.`,
               ErrorCodes.STORE_CLOSED
             );
           }

@@ -461,11 +461,7 @@ export const CheckoutPage: React.FC = () => {
           description = 'Your wallet balance is insufficient.';
           break;
         default:
-          if (paymentMethod === 'RAZORPAY') {
-            description = 'Unable to start payment. Please try again.';
-          } else {
-            description = parsed.message || 'Couldn\'t place your order. Please try again.';
-          }
+          description = parsed.message || (paymentMethod === 'RAZORPAY' ? 'Unable to start payment. Please try again.' : 'Couldn\'t place your order. Please try again.');
           break;
       }
 
@@ -489,7 +485,7 @@ export const CheckoutPage: React.FC = () => {
     },
   });
 
-  const handlePlaceOrder = useCallback(() => {
+  const handlePlaceOrder = useCallback(async () => {
     if (!selectedAddress) {
       showToast({
         type: 'error',
@@ -498,14 +494,27 @@ export const CheckoutPage: React.FC = () => {
       });
       return;
     }
-    if (cart.items.length === 0 && !pendingOrder) {
-      showToast({
-        type: 'error',
-        title: 'Cart Empty',
-        description: 'Your cart is empty. Please add items.',
+
+    // Refetch backend cart right before order placement to guarantee sync with PostgreSQL
+    try {
+      const freshCart = await queryClient.fetchQuery({
+        queryKey: queryKeys.cart(),
+        queryFn: () => cartService.getCart(),
+        staleTime: 0,
       });
-      return;
+
+      if (!freshCart || freshCart.items.length === 0) {
+        showToast({
+          type: 'error',
+          title: 'Cart Empty',
+          description: 'Your cart is empty. Please add items before checking out.',
+        });
+        return;
+      }
+    } catch {
+      // If network glitch occurs during refetch, fallback to local cart validation
     }
+
     if (paymentMethod === 'WALLET' && walletData && walletData.balance < pricing.totalAmount) {
       showToast({
         type: 'error',
@@ -516,7 +525,7 @@ export const CheckoutPage: React.FC = () => {
     }
 
     placeOrderMutation.mutate();
-  }, [selectedAddress, cart.items.length, pendingOrder, paymentMethod, walletData, pricing.totalAmount, placeOrderMutation, showToast]);
+  }, [selectedAddress, queryClient, paymentMethod, walletData, pricing.totalAmount, placeOrderMutation, showToast]);
 
   // ─── Empty cart guard ─────────────────────────────────────────────────────
   if (cart.items.length === 0 && !placeOrderMutation.isPending) {

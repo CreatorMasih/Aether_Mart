@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { PaymentMethod, OrderStatus } from '@prisma/client';
 
 export const placeOrderSchema = z.object({
-  addressId: z.string().uuid('Invalid Address ID format'),
-  paymentMethod: z.enum(['COD', 'WALLET', 'RAZORPAY']),
+  addressId: z.string().min(1, 'Address ID is required'),
+  paymentMethod: z.enum(['COD', 'WALLET', 'RAZORPAY', 'UPI', 'CARD']),
   couponCode: z.string().optional(),
   driverTip: z.number().min(0).optional().default(0),
   ecoPackaging: z.boolean().optional().default(false),

@@ -263,7 +263,7 @@ export class RiderService {
       });
 
       return { assignment: updatedAss, order: updatedOrder };
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     log.info(`[Rider Accept] riderId=${rider.id}, assignmentId=${updated.assignment.id}, orderId=${orderId}`);
 
@@ -308,7 +308,7 @@ export class RiderService {
       });
 
       return { assignment: updatedAss, order };
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     // Emit event
     orderEventEmitter.emitEvent(OrderEvent.OUT_FOR_DELIVERY, { order: result.order });
@@ -373,7 +373,7 @@ export class RiderService {
       });
 
       return { assignment: updatedAss, order: updatedOrder };
-    });
+    }, { maxWait: 15000, timeout: 15000 });
 
     // Emit delivered event
     orderEventEmitter.emitEvent(OrderEvent.DELIVERED, { order: result.order });
