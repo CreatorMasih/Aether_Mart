@@ -83,23 +83,19 @@ export class CatalogService {
     // 6. Geolocation distance filtering via stores
     if (query.latitude !== undefined && query.longitude !== undefined) {
       const stores = await catalogRepository.findStores(true);
-      let nearbyStoreIds = stores
+      const nearbyStoreIds = stores
         .filter((store) => {
           const dist = haversineDistance(
             { latitude: query.latitude!, longitude: query.longitude! },
             { latitude: store.latitude, longitude: store.longitude }
           );
-          return dist <= Math.max(query.maxDistanceKm || 10, store.deliveryRadiusKm || 10) && !store.isPaused && !store.isHoliday;
+          return dist <= Math.max(query.maxDistanceKm || 10, store.deliveryRadiusKm || 10) && store.isOpen && !store.isPaused && !store.isHoliday;
         })
         .map((store) => store.id);
 
-      if (nearbyStoreIds.length === 0 && stores.length > 0) {
-        nearbyStoreIds = stores.map((s) => s.id);
-      }
-
       if (query.storeId) {
         where.storeId = query.storeId;
-      } else if (nearbyStoreIds.length > 0) {
+      } else {
         where.storeId = { in: nearbyStoreIds };
       }
     } else if (query.storeId) {
@@ -228,7 +224,7 @@ export class CatalogService {
     // Filter/sort stores by distance if coordinates provided
     let nearbyStores = stores;
     if (lat !== undefined && lng !== undefined) {
-      const mapped = stores.map((store) => {
+      nearbyStores = stores.map((store) => {
         const distance = haversineDistance(
           { latitude: lat, longitude: lng },
           { latitude: store.latitude, longitude: store.longitude }
@@ -237,12 +233,9 @@ export class CatalogService {
           ...store,
           distance,
           estimatedDeliveryTime: (store.deliveryTimeMins || 15) + Math.ceil(distance * 3), // 3 mins per km
-          available: !store.isPaused && !store.isHoliday,
+          available: store.isOpen && !store.isPaused && !store.isHoliday,
         };
-      });
-
-      const filtered = mapped.filter((s) => s.available).sort((a, b) => a.distance - b.distance);
-      nearbyStores = filtered.length > 0 ? filtered : mapped;
+      }).filter((s) => s.available).sort((a, b) => a.distance - b.distance);
     }
 
     const [banners, flashDeals, topRated] = await Promise.all([

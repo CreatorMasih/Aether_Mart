@@ -32,6 +32,9 @@ export class CatalogRepository extends BaseRepository {
         ...params.where,
         deletedAt: null,
         store: {
+          isOpen: true,
+          isPaused: false,
+          isHoliday: false,
           NOT: {
             name: {
               contains: 'Test Store',
@@ -64,6 +67,16 @@ export class CatalogRepository extends BaseRepository {
       where: {
         ...where,
         deletedAt: null,
+        store: {
+          isOpen: true,
+          isPaused: false,
+          isHoliday: false,
+          NOT: {
+            name: {
+              contains: 'Test Store',
+            },
+          },
+        },
       },
     });
   }
@@ -267,6 +280,8 @@ export class CatalogRepository extends BaseRepository {
       where: activeOnly
         ? {
             isOpen: true,
+            isPaused: false,
+            isHoliday: false,
             NOT: {
               name: {
                 contains: 'Test Store',
@@ -294,6 +309,16 @@ export class CatalogRepository extends BaseRepository {
       where: {
         isActive: true,
         deletedAt: null,
+        store: {
+          isOpen: true,
+          isPaused: false,
+          isHoliday: false,
+          NOT: {
+            name: {
+              contains: 'Test Store',
+            },
+          },
+        },
       },
       orderBy: {
         price: 'desc', // Top rated logic: placeholder or join on ratings.

@@ -166,7 +166,7 @@ describe('🛒 Catalog Module Integration Tests', () => {
   it('8. Should fetch home feed widgets matching user coordinates', async () => {
     const res = await request(app)
       .get('/api/customer/home')
-      .query({ latitude: '12.9340', longitude: '77.6235' })
+      .query({ latitude: '12.9600', longitude: '77.6000' })
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
