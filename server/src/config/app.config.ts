@@ -74,11 +74,8 @@ export function createApp(): Application {
 
   app.use(compression());
 
-  // ── Trust Proxy (for correct IP behind Nginx / load balancer) ─────────────
-
-  if (process.env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1);
-  }
+  // ── Trust Proxy (for correct IP behind Vercel / Render / Nginx reverse proxies) ─
+  app.set('trust proxy', true);
 
   // ── Request Logging ────────────────────────────────────────────────────────
 

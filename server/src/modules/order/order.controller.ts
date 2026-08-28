@@ -102,12 +102,7 @@ export class OrderController {
         return;
       }
 
-      const profile = await authRepository.findUserWithProfile(userId);
-      const customerId = profile?.customer?.id;
-      if (!customerId) {
-        sendError(res, 'Customer profile required', HttpStatus.FORBIDDEN, ErrorCodes.FORBIDDEN);
-        return;
-      }
+      const customerId = await authRepository.ensureCustomerId(userId);
 
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
       const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
@@ -136,6 +131,57 @@ export class OrderController {
   };
 
   /**
+   * Customer cancels an order (if in PLACED or CONFIRMED state).
+   */
+  public cancelOrderCustomer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const customerId = await authRepository.ensureCustomerId(userId);
+
+      const orderId = req.params.id as string;
+      const reason = req.body?.reason as string | undefined;
+
+      const order = await orderService.cancelOrderCustomer(customerId, orderId, reason);
+      sendSuccess(res, order, 'Order cancelled successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Merchant rejects/cancels an order belonging to their store.
+   */
+  public cancelOrderMerchant = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const profile = await authRepository.findUserWithProfile(userId);
+      const merchantId = profile?.merchant?.id;
+      if (!merchantId) {
+        sendError(res, 'Merchant profile required', HttpStatus.FORBIDDEN, ErrorCodes.FORBIDDEN);
+        return;
+      }
+
+      const orderId = req.params.id as string;
+      const reason = req.body?.reason as string | undefined;
+
+      const order = await orderService.cancelOrderMerchant(merchantId, orderId, reason);
+      sendSuccess(res, order, 'Order rejected/cancelled successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
    * Initiates a refund request for customer.
    */
   public requestRefund = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -146,12 +192,7 @@ export class OrderController {
         return;
       }
 
-      const profile = await authRepository.findUserWithProfile(userId);
-      const customerId = profile?.customer?.id;
-      if (!customerId) {
-        sendError(res, 'Customer profile required', HttpStatus.FORBIDDEN, ErrorCodes.FORBIDDEN);
-        return;
-      }
+      const customerId = await authRepository.ensureCustomerId(userId);
 
       const orderId = req.params.id as string;
       const { reason } = refundRequestSchema.parse(req.body);

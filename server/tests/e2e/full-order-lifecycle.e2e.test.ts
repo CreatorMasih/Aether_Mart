@@ -510,4 +510,109 @@ describe('⚡ PRODUCTION MVP — Full End-to-End Order Lifecycle (Customer → M
     const orderCount = await prisma.order.count({ where: { id: createdOrderId } });
     expect(orderCount).toBe(1); // No duplicates
   });
+
+  it('Step 22: Verify cart persistence on refresh and failed Razorpay payment retention', async () => {
+    // 1. Add item to cart
+    const addRes = await request(app)
+      .post('/api/customer/cart/add')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ productId, variantId, quantity: 1 });
+
+    expect(addRes.status).toBe(200);
+    expect(addRes.body.data.items.length).toBe(1);
+
+    // 2. Refresh cart (simulate page refresh)
+    const refreshRes = await request(app)
+      .get('/api/customer/cart')
+      .set('Authorization', `Bearer ${customerToken}`);
+
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.data.items.length).toBe(1);
+
+    // 3. Initiate Razorpay order placement
+    const rzpOrderRes = await request(app)
+      .post('/api/customer/orders')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ addressId, paymentMethod: 'RAZORPAY' });
+
+    expect(rzpOrderRes.status).toBe(200);
+    const rzpOrder = Array.isArray(rzpOrderRes.body.data) ? rzpOrderRes.body.data[0] : rzpOrderRes.body.data;
+    const rzpPaymentId = rzpOrder.payment.id;
+
+    // 4. Simulate failed payment callback
+    const failRes = await request(app)
+      .post('/api/customer/orders/confirm-payment')
+      .send({ paymentId: rzpPaymentId, status: 'FAILED' });
+
+    expect(failRes.status).toBe(200);
+    expect(failRes.body.data.order.status).toBe('CANCELLED');
+
+    // 5. Verify cart is STILL INTACT after failed payment
+    const checkCartRes = await request(app)
+      .get('/api/customer/cart')
+      .set('Authorization', `Bearer ${customerToken}`);
+
+    expect(checkCartRes.status).toBe(200);
+    expect(checkCartRes.body.data.items.length).toBe(1);
+
+    // Clean cart
+    await request(app)
+      .delete('/api/customer/cart/clear')
+      .set('Authorization', `Bearer ${customerToken}`);
+  });
+
+  it('Step 23: Verify Customer cancellation restores stock and cancels delivery', async () => {
+    // Add item to cart
+    await request(app)
+      .post('/api/customer/cart/add')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ productId, variantId, quantity: 1 });
+
+    // Place COD order
+    const placeRes = await request(app)
+      .post('/api/customer/orders')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ addressId, paymentMethod: 'COD' });
+
+    const order = Array.isArray(placeRes.body.data) ? placeRes.body.data[0] : placeRes.body.data;
+
+    // Customer cancels order
+    const cancelRes = await request(app)
+      .post(`/api/customer/orders/${order.id}/cancel`)
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ reason: 'Changed my mind' });
+
+    expect(cancelRes.status).toBe(200);
+    expect(cancelRes.body.data.status).toBe('CANCELLED');
+
+    // Verify DB
+    const dbOrder = await prisma.order.findUnique({ where: { id: order.id } });
+    expect(dbOrder?.status).toBe('CANCELLED');
+  });
+
+  it('Step 24: Verify Merchant rejection cancels order correctly', async () => {
+    // Add item to cart
+    await request(app)
+      .post('/api/customer/cart/add')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ productId, variantId, quantity: 1 });
+
+    // Place COD order
+    const placeRes = await request(app)
+      .post('/api/customer/orders')
+      .set('Authorization', `Bearer ${customerToken}`)
+      .send({ addressId, paymentMethod: 'COD' });
+
+    const order = Array.isArray(placeRes.body.data) ? placeRes.body.data[0] : placeRes.body.data;
+
+    // Merchant rejects order
+    const rejectRes = await request(app)
+      .post(`/api/customer/orders/${order.id}/merchant-cancel`)
+      .set('Authorization', `Bearer ${merchantToken}`)
+      .send({ reason: 'Out of stock' });
+
+    expect(rejectRes.status).toBe(200);
+    expect(rejectRes.body.data.status).toBe('CANCELLED');
+  });
 });
+

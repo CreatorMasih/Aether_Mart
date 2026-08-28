@@ -1,5 +1,5 @@
 import { BaseRepository } from '../../common/repositories/base.repository';
-import { Rider, DeliveryAssignment, DeliveryTracking, Order, OrderStatus } from '@prisma/client';
+import { Rider, DeliveryAssignment, DeliveryTracking, Order, OrderStatus, DeliveryStatus } from '@prisma/client';
 
 export class RiderRepository extends BaseRepository {
   public async findRiderByUserId(userId: string): Promise<Rider | null> {
@@ -57,15 +57,19 @@ export class RiderRepository extends BaseRepository {
   }
 
   /**
-   * Retrieves orders in READY_FOR_PICKUP status that do not have any active rider assignment.
+   * Retrieves orders in READY_FOR_PICKUP status that do not have an active accepted rider assignment.
    */
   public async findAvailableDeliveries(): Promise<Order[]> {
     return this.db.order.findMany({
       where: {
-        status: OrderStatus.READY_FOR_PICKUP,
+        status: { in: [OrderStatus.READY_FOR_PICKUP, OrderStatus.PACKING] },
         OR: [
           { deliveryAssignment: null },
-          { deliveryAssignment: { status: { in: ['ASSIGNED', 'CANCELLED'] } } },
+          {
+            deliveryAssignment: {
+              status: { in: [DeliveryStatus.ASSIGNED, DeliveryStatus.CANCELLED] },
+            },
+          },
         ],
       },
       include: {

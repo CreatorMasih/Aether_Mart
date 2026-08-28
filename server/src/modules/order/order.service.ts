@@ -4,7 +4,7 @@ import { cartRepository } from '../cart/cart.repository';
 import { authRepository } from '../auth/auth.repository';
 import { orderEventEmitter, OrderEvent } from '../../common/events/order-event.emitter';
 import getCache from '../../config/redis.config';
-import { Order, OrderStatus, PaymentStatus, PaymentMethod } from '@prisma/client';
+import { Order, OrderStatus, PaymentStatus, PaymentMethod, DeliveryStatus } from '@prisma/client';
 import { BadRequestError, NotFoundError } from '../../common/middlewares/errorHandler.middleware';
 import { ErrorCodes } from '../../utils/response.util';
 import { createModuleLogger } from '../../utils/logger';
@@ -242,8 +242,8 @@ export class OrderService {
       return createdOrders;
     }, { maxWait: 15000, timeout: 15000 });
 
-    // 10. Clear Customer Cart if checking out from DB cart
-    if (clearCartAfterPlacement) {
+    // 10. Clear Customer Cart ONLY after order/payment confirmation
+    if (clearCartAfterPlacement && params.paymentMethod !== PaymentMethod.RAZORPAY) {
       await cartService.clearCart(customerId);
     }
 
@@ -348,8 +348,9 @@ export class OrderService {
       }
     }, { maxWait: 15000, timeout: 15000 });
 
-    // Emit Events
+    // Emit Events & Clear Cart on payment success
     if (status === 'SUCCESS') {
+      await cartService.clearCart(result.order.customerId);
       orderEventEmitter.emitEvent(OrderEvent.PAYMENT_SUCCESS, { order: result.order });
       await this.rewardLoyaltyPoints(result.order.customerId, result.order.id, result.order.subtotal);
     }
@@ -424,7 +425,7 @@ export class OrderService {
   }
 
   /**
-   * Updates Order Status (placed -> packing -> delivered, etc.).
+   * Updates Order Status with strict canonical state machine transition checks.
    */
   public async updateOrderStatus(
     orderId: string,
@@ -433,9 +434,23 @@ export class OrderService {
     const order = await orderRepository.findOrderById(orderId);
     if (!order) throw new NotFoundError('Order');
 
-    // Prevent transitioning final states
-    if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.CANCELLED) {
-      throw new BadRequestError(`Cannot transition order from final state: ${order.status}`, ErrorCodes.BAD_REQUEST);
+    // Canonical State Machine Transition Matrix
+    const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+      PLACED: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
+      CONFIRMED: [OrderStatus.PACKING, OrderStatus.CANCELLED],
+      PACKING: [OrderStatus.READY_FOR_PICKUP, OrderStatus.CANCELLED],
+      READY_FOR_PICKUP: [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.CANCELLED],
+      OUT_FOR_DELIVERY: [OrderStatus.DELIVERED],
+      DELIVERED: [],
+      CANCELLED: [],
+    };
+
+    const allowedNext = VALID_TRANSITIONS[order.status as OrderStatus] || [];
+    if (!allowedNext.includes(status)) {
+      throw new BadRequestError(
+        `Invalid order status transition from ${order.status} to ${status}.`,
+        ErrorCodes.BAD_REQUEST
+      );
     }
 
     const updated = await this.db.$transaction(async (tx) => {
@@ -456,6 +471,12 @@ export class OrderService {
         for (const item of order.items) {
           await orderRepository.releaseInventory(order.storeId, item.productId, item.variantId, item.quantity, tx);
         }
+
+        // Cancel active delivery assignment
+        await tx.deliveryAssignment.updateMany({
+          where: { orderId, status: { in: [DeliveryStatus.ASSIGNED, DeliveryStatus.ACCEPTED] } },
+          data: { status: DeliveryStatus.CANCELLED },
+        });
 
         // Process refund if paymentStatus is PAID
         if (order.paymentStatus === PaymentStatus.PAID) {
@@ -510,6 +531,45 @@ export class OrderService {
     }
 
     return updated;
+  }
+
+  /**
+   * Customer cancels their own order if cancellation policy permits (PLACED / CONFIRMED).
+   */
+  public async cancelOrderCustomer(customerId: string, orderId: string, reason?: string): Promise<Order> {
+    const order = await orderRepository.findOrderById(orderId);
+    if (!order) throw new NotFoundError('Order');
+    if (order.customerId !== customerId) {
+      throw new BadRequestError('Not authorized to cancel this order.', ErrorCodes.UNAUTHORIZED);
+    }
+
+    if (![OrderStatus.PLACED, OrderStatus.CONFIRMED].includes(order.status)) {
+      throw new BadRequestError(
+        `Order cannot be cancelled at status '${order.status}'. Cancellation is only allowed for PLACED or CONFIRMED orders before preparation.`,
+        ErrorCodes.BAD_REQUEST
+      );
+    }
+
+    return this.updateOrderStatus(orderId, OrderStatus.CANCELLED);
+  }
+
+  /**
+   * Merchant cancels/rejects an order belonging to their store.
+   */
+  public async cancelOrderMerchant(merchantId: string, orderId: string, reason?: string): Promise<Order> {
+    const order = await orderRepository.findOrderById(orderId);
+    if (!order) throw new NotFoundError('Order');
+
+    const store = await this.db.store.findUnique({ where: { id: order.storeId } });
+    if (!store || store.merchantId !== merchantId) {
+      throw new BadRequestError('Not authorized to cancel orders for this store.', ErrorCodes.UNAUTHORIZED);
+    }
+
+    if ([OrderStatus.DELIVERED, OrderStatus.CANCELLED].includes(order.status)) {
+      throw new BadRequestError(`Cannot cancel order in state '${order.status}'.`, ErrorCodes.BAD_REQUEST);
+    }
+
+    return this.updateOrderStatus(orderId, OrderStatus.CANCELLED);
   }
 
   /**

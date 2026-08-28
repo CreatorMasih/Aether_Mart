@@ -66,6 +66,19 @@ export class OrderService extends BaseRepository {
   }
 
   /**
+   * Cancels a PLACED or CONFIRMED order.
+   */
+  public async cancelOrder(orderId: string, reason?: string): Promise<OrderData> {
+    return this.executeRequest(async () => {
+      const response = await this.client.post<ApiEnvelope<unknown>>(
+        `/customer/orders/${orderId}/cancel`,
+        { reason },
+      );
+      return mapOrderDto(response.data.data as Parameters<typeof mapOrderDto>[0]);
+    });
+  }
+
+  /**
    * Initiates a refund request for a delivered order.
    */
   public async requestRefund(orderId: string, reason: string): Promise<OrderData> {

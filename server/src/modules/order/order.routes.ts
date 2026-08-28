@@ -10,6 +10,7 @@ const router = Router();
 router.post('/', authenticate, orderController.placeOrder);
 router.get('/', authenticate, orderController.getOrderHistory);
 router.get('/:id', authenticate, orderController.getOrderById);
+router.post('/:id/cancel', authenticate, orderController.cancelOrderCustomer);
 router.post('/:id/refund', authenticate, orderController.requestRefund);
 router.post('/:id/retry-payment', authenticate, orderController.retryPayment);
 
@@ -17,6 +18,7 @@ router.post('/:id/retry-payment', authenticate, orderController.retryPayment);
 router.post('/confirm-payment', orderController.confirmPayment);
 
 // Merchant / Admin management operations
+router.post('/:id/merchant-cancel', authenticate, requireMerchantOrAdmin, orderController.cancelOrderMerchant);
 router.put('/:id/status', authenticate, requireMerchantOrAdmin, orderController.updateOrderStatus);
 
 export default router;

@@ -148,13 +148,98 @@ describe('📦 Order, Cart & Checkout Module Integration Tests', () => {
       });
     accessToken = authRes.body.data.token;
 
-    // Fetch product details
-    const product = await prisma.product.findFirst({
+    // Ensure Merchant & Stores exist for tests
+    const merchantUser1 = await prisma.user.upsert({
+      where: { email: 'merchant1-ordertest@aethermart.com' },
+      update: {},
+      create: { email: 'merchant1-ordertest@aethermart.com', role: 'SHOPKEEPER', isVerified: true },
+    });
+    const merchant1 = await prisma.merchant.upsert({
+      where: { userId: merchantUser1.id },
+      update: {},
+      create: { userId: merchantUser1.id, fullName: 'Merchant 1' },
+    });
+    const store1 = await prisma.store.upsert({
+      where: { id: 'store-1' },
+      update: { isOpen: true, isHoliday: false, openingTime: '00:00', closingTime: '23:59' },
+      create: { id: 'store-1', merchantId: merchant1.id, name: 'Store 1', address: 'Mahasamund', latitude: 12.9716, longitude: 77.5946, isOpen: true, openingTime: '00:00', closingTime: '23:59' },
+    });
+
+    const merchantUser2 = await prisma.user.upsert({
+      where: { email: 'merchant2-ordertest@aethermart.com' },
+      update: {},
+      create: { email: 'merchant2-ordertest@aethermart.com', role: 'SHOPKEEPER', isVerified: true },
+    });
+    const merchant2 = await prisma.merchant.upsert({
+      where: { userId: merchantUser2.id },
+      update: {},
+      create: { userId: merchantUser2.id, fullName: 'Merchant 2' },
+    });
+    await prisma.store.upsert({
+      where: { id: 'store-2' },
+      update: { isOpen: true, isHoliday: false, openingTime: '00:00', closingTime: '23:59' },
+      create: { id: 'store-2', merchantId: merchant2.id, name: 'Store 2', address: 'Mahasamund', latitude: 12.9716, longitude: 77.5946, isOpen: true, openingTime: '00:00', closingTime: '23:59' },
+    });
+
+    const category = await prisma.category.upsert({
+      where: { slug: 'daily-essentials-test' },
+      update: {},
+      create: { id: 'cat-test-1', name: 'Daily Essentials', slug: 'daily-essentials-test' },
+    });
+
+    let product = await prisma.product.findFirst({
       where: { name: 'Organic Whole Milk' },
       include: { variants: true },
     });
-    targetProductId = product?.id || '';
-    targetVariantId = product?.variants?.[0]?.id || '';
+
+    if (!product) {
+      product = await prisma.product.create({
+        data: {
+          storeId: store1.id,
+          categoryId: category.id,
+          name: 'Organic Whole Milk',
+          description: 'Fresh milk',
+          price: 60.0,
+          unit: '500ml',
+          sku: 'MILK-500',
+        },
+        include: { variants: true },
+      });
+      const v = await prisma.productVariant.create({
+        data: { productId: product.id, name: '500ml', price: 60.0, stock: 100, sku: 'MILK-500-VAR' },
+      });
+      await prisma.inventory.create({
+        data: { storeId: store1.id, productId: product.id, variantId: v.id, stockQty: 100 },
+      });
+      product = (await prisma.product.findUnique({
+        where: { id: product.id },
+        include: { variants: true },
+      }))!;
+    } else if (product.variants.length > 0) {
+      await prisma.productVariant.update({
+        where: { id: product.variants[0].id },
+        data: { stock: 100 },
+      });
+    }
+
+    let store2Product = await prisma.product.findFirst({ where: { storeId: 'store-2' }, include: { variants: true } });
+    if (!store2Product) {
+      const p2 = await prisma.product.create({
+        data: { storeId: 'store-2', categoryId: category.id, name: 'Store 2 Item', description: 'Item', price: 100.0, unit: '1pc', sku: 'ST2-ITEM' },
+      });
+      const v2 = await prisma.productVariant.create({
+        data: { productId: p2.id, name: '1pc', price: 100.0, stock: 50, sku: 'ST2-ITEM-VAR' },
+      });
+      await prisma.inventory.create({ data: { storeId: 'store-2', productId: p2.id, variantId: v2.id, stockQty: 50 } });
+    } else if (store2Product.variants.length > 0) {
+      await prisma.productVariant.update({
+        where: { id: store2Product.variants[0].id },
+        data: { stock: 50 },
+      });
+    }
+
+    targetProductId = product.id;
+    targetVariantId = product.variants[0]?.id || '';
   });
 
   it('1. Should add item to cart with inventory pre-checks', async () => {
@@ -177,8 +262,24 @@ describe('📦 Order, Cart & Checkout Module Integration Tests', () => {
   it('2. Should fail to add item from another store (Store Conflict invariant)', async () => {
     const store2Product = await prisma.product.findFirst({
       where: { storeId: 'store-2' },
+      include: { variants: true },
     });
     expect(store2Product).not.toBeNull();
+    if (store2Product) {
+      if (store2Product.variants.length === 0) {
+        const v = await prisma.productVariant.create({
+          data: { productId: store2Product.id, name: 'Default', price: store2Product.price, stock: 50, sku: `${store2Product.sku}-VAR` }
+        });
+        await prisma.inventory.create({
+          data: { storeId: 'store-2', productId: store2Product.id, variantId: v.id, stockQty: 50 }
+        });
+      } else {
+        await prisma.productVariant.updateMany({
+          where: { productId: store2Product.id },
+          data: { stock: 50 },
+        });
+      }
+    }
 
     const res = await request(app)
       .post('/api/customer/cart/add')
@@ -281,7 +382,8 @@ describe('📦 Order, Cart & Checkout Module Integration Tests', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.paymentStatus).toBe(PaymentStatus.PAID);
+    const orderResObj = res.body.data.order || res.body.data;
+    expect(orderResObj.paymentStatus).toBe(PaymentStatus.PAID);
   });
 
   it('6. Should transition order statuses (PLACED -> CONFIRMED -> PACKING -> READY_FOR_PICKUP)', async () => {

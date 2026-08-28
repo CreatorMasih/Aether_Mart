@@ -94,7 +94,20 @@ export class MerchantService extends BaseRepository {
   }
 
   /**
-   * Updates an order status (Accept, Start Packing, Finish Packing, Cancel).
+   * Rejects / cancels an order for the merchant store.
+   */
+  public async cancelOrder(orderId: string, reason?: string): Promise<OrderData> {
+    return this.executeRequest(async () => {
+      const response = await this.client.post<ApiEnvelope<unknown>>(
+        `/customer/orders/${orderId}/merchant-cancel`,
+        { reason }
+      );
+      return mapOrderDto(response.data.data as Parameters<typeof mapOrderDto>[0]);
+    });
+  }
+
+  /**
+   * Updates an order status (Accept, Start Packing, Finish Packing).
    */
   public async updateOrderStatus(orderId: string, status: string): Promise<OrderData> {
     return this.executeRequest(async () => {

@@ -20,39 +20,54 @@ const rateLimitHandler = (req: Request, res: Response): void => {
   );
 };
 
+// Helper to extract real client IP behind load balancers / proxies
+const getClientIp = (req: Request): string => {
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  if (typeof xForwardedFor === 'string' && xForwardedFor.trim() !== '') {
+    return xForwardedFor.split(',')[0].trim();
+  }
+  if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+    return xForwardedFor[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || '127.0.0.1';
+};
+
 // ─── Global Rate Limiter (all routes) ────────────────────────────────────────
-// 100 requests per 15 minutes per IP
+// 200 requests per 15 minutes per IP
 
 export const globalRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  windowMs: 15 * 60 * 1000,
+  max: 200,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  keyGenerator: (req) => getClientIp(req),
   handler: rateLimitHandler,
   skip: (req) => process.env.NODE_ENV === 'test' || req.path === '/api/health',
 });
 
 // ─── Auth Rate Limiter (login / OTP send) ────────────────────────────────────
-// 50 requests in dev OTP mode (QA friendly), 5 requests in production OTP mode per 15 mins
+// 100 requests in QA/dev mode, 20 in prod per 15 mins
 
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: () => (getOtpMode() === 'dev' ? parseInt(process.env.RATE_LIMIT_MAX_AUTH_DEV || '50', 10) : parseInt(process.env.RATE_LIMIT_MAX_AUTH || '5', 10)),
+  max: () => (getOtpMode() === 'dev' ? 100 : 20),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  keyGenerator: (req) => `${getClientIp(req)}:${req.body?.phone || req.body?.email || ''}`,
   handler: rateLimitHandler,
   skip: () => process.env.NODE_ENV === 'test',
   message: 'Too many authentication attempts. Please try again in 15 minutes.',
 });
 
 // ─── OTP Rate Limiter (OTP sending specifically) ─────────────────────────────
-// 50 OTP requests in dev OTP mode (QA friendly), 5 in production OTP mode per 15 mins
+// 100 OTP requests in QA/dev mode, 20 in prod per 15 mins
 
 export const otpRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: () => (getOtpMode() === 'dev' ? parseInt(process.env.RATE_LIMIT_MAX_AUTH_DEV || '50', 10) : parseInt(process.env.RATE_LIMIT_MAX_AUTH || '5', 10)),
+  windowMs: 15 * 60 * 1000,
+  max: () => (getOtpMode() === 'dev' ? 100 : 20),
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  keyGenerator: (req) => `${getClientIp(req)}:${req.body?.phone || req.body?.email || ''}`,
   handler: rateLimitHandler,
   skip: () => process.env.NODE_ENV === 'test',
   message: 'OTP request limit reached. Please try again in 15 minutes.',

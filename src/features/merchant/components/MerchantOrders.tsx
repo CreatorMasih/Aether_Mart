@@ -218,10 +218,26 @@ export const MerchantOrders: React.FC = () => {
     printWindow.document.close();
   };
 
-  const handleRejectConfirm = () => {
+  const handleRejectConfirm = async () => {
     if (!rejectOrderTarget) return;
-    updateStatusMutation.mutate({ id: rejectOrderTarget.id, status: 'CANCELLED' });
-    setRejectOrderTarget(null);
+    try {
+      await merchantService.cancelOrder(rejectOrderTarget.id, selectedRejectReason);
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantOrders() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.merchantDashboard() });
+      showToast({
+        type: 'success',
+        title: 'Order Rejected',
+        description: `Order ${rejectOrderTarget.orderNumber} has been rejected.`,
+      });
+    } catch (err: any) {
+      showToast({
+        type: 'error',
+        title: 'Rejection Failed',
+        description: err.message || 'Unable to reject order.',
+      });
+    } finally {
+      setRejectOrderTarget(null);
+    }
   };
 
   if (ordersLoading) {

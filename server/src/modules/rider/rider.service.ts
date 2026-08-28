@@ -195,10 +195,18 @@ export class RiderService {
       const order = await riderRepository.prisma.order.findUnique({ where: { id: orderId } });
       if (!order) throw new NotFoundError('Order');
 
-      // Check if an existing unassigned delivery assignment exists for this order
+      if (order.status === OrderStatus.CANCELLED) {
+        throw new BadRequestError('This order has been cancelled and cannot be accepted.');
+      }
+
+      // Check if an existing delivery assignment exists for this order
       const existingUnassigned = await riderRepository.prisma.deliveryAssignment.findFirst({
         where: { orderId },
       });
+
+      if (existingUnassigned && existingUnassigned.riderId && existingUnassigned.riderId !== rider.id && existingUnassigned.status === DeliveryStatus.ACCEPTED) {
+        throw new BadRequestError('This job was already accepted by another delivery partner.');
+      }
 
       const pickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
       const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();

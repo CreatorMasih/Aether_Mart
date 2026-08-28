@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, 
@@ -36,6 +36,7 @@ type TabType = 'profile' | 'orders' | 'wallet' | 'support' | 'notifications';
 export const CustomerDashboardPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
 
   const { user, clearSession } = useAuthStore();
@@ -391,6 +392,33 @@ export const CustomerDashboardPage: React.FC = () => {
                       <div className="border-t border-border-primary/60 pt-2 flex items-center justify-between">
                         <span className="font-extrabold text-text-primary">Total: {formatCurrency(order.totalAmount)}</span>
                         <div className="flex gap-2">
+                          {['PLACED', 'CONFIRMED'].includes(order.status) && (
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('Are you sure you want to cancel this order?')) {
+                                  try {
+                                    await orderService.cancelOrder(order.id);
+                                    queryClient.invalidateQueries({ queryKey: ['orders'] });
+                                    queryClient.invalidateQueries({ queryKey: ['customer', 'wallet'] });
+                                    showToast({
+                                      type: 'success',
+                                      title: 'Order Cancelled',
+                                      description: 'Your order was cancelled successfully.',
+                                    });
+                                  } catch (err: any) {
+                                    showToast({
+                                      type: 'error',
+                                      title: 'Cancellation Failed',
+                                      description: err.message || 'Unable to cancel order.',
+                                    });
+                                  }
+                                }
+                              }}
+                              className="px-2.5 py-1.5 border border-status-error/40 bg-status-error/10 hover:bg-status-error/20 text-status-error rounded-lg text-[10px] font-bold cursor-pointer flex items-center gap-1 transition-all"
+                            >
+                              Cancel Order
+                            </button>
+                          )}
                           <button 
                             onClick={() => handleDownloadInvoice(order.id)}
                             className="px-2.5 py-1.5 border border-border-primary bg-bg-secondary hover:bg-bg-primary rounded-lg text-[10px] font-bold text-text-secondary hover:text-text-primary cursor-pointer flex items-center gap-1"

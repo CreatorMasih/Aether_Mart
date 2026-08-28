@@ -419,7 +419,11 @@ export class CartService {
       quantity: item.quantity,
     }));
 
-    return this.recalculateCartPricing(cart.customerId, items);
+    const pricing = await this.recalculateCartPricing(cart.customerId, items);
+    return {
+      id: cart.id,
+      ...pricing,
+    };
   }
 
   // Hook db access directly for simpler helper routines

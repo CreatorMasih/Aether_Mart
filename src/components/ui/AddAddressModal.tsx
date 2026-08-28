@@ -5,6 +5,7 @@ import { addressService, type CreateAddressInput } from '../../features/customer
 import { useCustomerAddresses } from '../../features/customer-checkout/hooks/useCustomerAddresses';
 import { useToast } from '../../hooks/useToast';
 import { useAuthStore } from '../../features/auth/store/auth-store';
+import { checkLocationServiceability } from '../../core/config/serviceability';
 import type { Address } from '../../types';
 
 interface AddAddressModalProps {
@@ -95,7 +96,8 @@ export const AddAddressModal: React.FC<AddAddressModalProps> = ({
         setState(details.state);
 
         // Check Mahasamund serviceability
-        if (!details.city.toLowerCase().includes('mahasamund') && !details.district.toLowerCase().includes('mahasamund') && cleanPin !== '493445') {
+        const isServiceable = checkLocationServiceability({ pincode: cleanPin, city: details.city, district: details.district }).isServiceable;
+        if (!isServiceable) {
           setServiceabilityWarning("Aether Mart isn't available at this location yet. Currently serving Mahasamund, CG.");
         } else {
           setServiceabilityWarning(null);
