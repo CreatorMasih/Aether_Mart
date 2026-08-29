@@ -123,9 +123,11 @@ export class CatalogController {
         customerId = profile?.customer?.id;
       }
 
-      // Check geo coordinates in query params
-      const lat = req.query.latitude ? parseFloat(req.query.latitude as string) : undefined;
-      const lng = req.query.longitude ? parseFloat(req.query.longitude as string) : undefined;
+      // Check geo coordinates in query params (supporting latitude/lat and longitude/lng)
+      const latRaw = (req.query.latitude || req.query.lat) as string | undefined;
+      const lngRaw = (req.query.longitude || req.query.lng) as string | undefined;
+      const lat = latRaw ? parseFloat(latRaw) : undefined;
+      const lng = lngRaw ? parseFloat(lngRaw) : undefined;
 
       const feed = await catalogService.getHomeFeed(customerId, lat, lng);
       sendSuccess(res, feed, 'Home feed data fetched successfully');
@@ -140,8 +142,10 @@ export class CatalogController {
   public getStoreById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = req.params.id as string;
-      const lat = req.query.latitude ? parseFloat(req.query.latitude as string) : undefined;
-      const lng = req.query.longitude ? parseFloat(req.query.longitude as string) : undefined;
+      const latRaw = (req.query.latitude || req.query.lat) as string | undefined;
+      const lngRaw = (req.query.longitude || req.query.lng) as string | undefined;
+      const lat = latRaw ? parseFloat(latRaw) : undefined;
+      const lng = lngRaw ? parseFloat(lngRaw) : undefined;
 
       const store = await catalogService.getStoreById(id, lat, lng);
       sendSuccess(res, store, 'Store details fetched successfully');

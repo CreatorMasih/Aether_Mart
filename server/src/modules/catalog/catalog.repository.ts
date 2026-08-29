@@ -33,12 +33,11 @@ export class CatalogRepository extends BaseRepository {
         deletedAt: null,
         isActive: true,
         store: {
+          ...(params.where?.store || {}),
           isOpen: true,
           isPaused: false,
           isHoliday: false,
-          merchant: {
-            isApproved: true,
-          },
+          deletedAt: null,
         },
       },
       orderBy: params.orderBy,
@@ -68,12 +67,11 @@ export class CatalogRepository extends BaseRepository {
         deletedAt: null,
         isActive: true,
         store: {
+          ...(where?.store || {}),
           isOpen: true,
           isPaused: false,
           isHoliday: false,
-          merchant: {
-            isApproved: true,
-          },
+          deletedAt: null,
         },
       },
     });
@@ -280,11 +278,9 @@ export class CatalogRepository extends BaseRepository {
             isOpen: true,
             isPaused: false,
             isHoliday: false,
-            merchant: {
-              isApproved: true,
-            },
+            deletedAt: null,
           }
-        : {},
+        : { deletedAt: null },
     });
   }
 
@@ -309,9 +305,7 @@ export class CatalogRepository extends BaseRepository {
           isOpen: true,
           isPaused: false,
           isHoliday: false,
-          merchant: {
-            isApproved: true,
-          },
+          deletedAt: null,
         },
       },
       orderBy: {

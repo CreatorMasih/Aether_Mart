@@ -534,6 +534,14 @@ export class AuthService {
     const user = await authRepository.findUserWithProfile(userId);
     if (!user) throw new NotFoundError('User');
 
+    if (user.status === UserStatus.BLOCKED || user.status === UserStatus.SUSPENDED) {
+      throw new AppError(
+        `This account is ${user.status.toLowerCase()}. Please contact support.`,
+        HttpStatus.FORBIDDEN,
+        ErrorCodes.ACCOUNT_SUSPENDED
+      );
+    }
+
     const isProfileComplete = this.checkProfileCompletion(user);
     const savedAddresses = (user.addresses || []).map((addr: any) => ({
       id: addr.id,

@@ -667,6 +667,102 @@ export class OrderService {
     }
   }
 
+  /**
+   * Submits Store and Rider ratings for a delivered order.
+   */
+  public async submitOrderRatings(
+    userId: string,
+    orderId: string,
+    data: { storeRating: number; storeComment?: string; riderRating?: number; riderComment?: string }
+  ): Promise<any> {
+    const user = await this.db.user.findUnique({ where: { id: userId }, include: { customer: true } });
+    if (!user || !user.customer) throw new NotFoundError('Customer Profile');
+    const customerId = user.customer.id;
+
+    const order = await orderRepository.findOrderById(orderId);
+    if (!order) throw new NotFoundError('Order');
+    if (order.customerId !== customerId) {
+      throw new BadRequestError('Unauthorized to submit rating for this order.', ErrorCodes.UNAUTHORIZED);
+    }
+
+    if (order.status !== OrderStatus.DELIVERED) {
+      throw new BadRequestError('Ratings can only be submitted for delivered orders.', ErrorCodes.BAD_REQUEST);
+    }
+
+    // Check duplicate rating submission for this order
+    const existingOrderRating = await this.db.auditLog.findFirst({
+      where: { action: 'SUBMIT_ORDER_RATING', targetId: orderId, userId }
+    });
+
+    if (existingOrderRating) {
+      throw new BadRequestError('Ratings have already been submitted for this order.', ErrorCodes.ALREADY_EXISTS);
+    }
+
+    return this.db.$transaction(async (tx) => {
+      // 1. Store Rating
+      await tx.rating.create({
+        data: {
+          targetId: order.storeId,
+          targetType: 'STORE',
+          customerId,
+          score: data.storeRating,
+        }
+      });
+
+      // Recalculate Store average rating
+      const storeRatings = await tx.rating.findMany({
+        where: { targetId: order.storeId, targetType: 'STORE' }
+      });
+      const avgStoreRating = parseFloat((storeRatings.reduce((sum, r) => sum + r.score, 0) / storeRatings.length).toFixed(1));
+      await tx.store.update({
+        where: { id: order.storeId },
+        data: { rating: avgStoreRating }
+      });
+
+      // 2. Rider Rating
+      let avgRiderRating: number | null = null;
+      const assignment = await tx.deliveryAssignment.findFirst({ where: { orderId } });
+      if (assignment && data.riderRating) {
+        await tx.rating.create({
+          data: {
+            targetId: assignment.riderId,
+            targetType: 'RIDER',
+            customerId,
+            score: data.riderRating,
+          }
+        });
+
+        const riderRatings = await tx.rating.findMany({
+          where: { targetId: assignment.riderId, targetType: 'RIDER' }
+        });
+        avgRiderRating = parseFloat((riderRatings.reduce((sum, r) => sum + r.score, 0) / riderRatings.length).toFixed(1));
+        await tx.rider.update({
+          where: { id: assignment.riderId },
+          data: { rating: avgRiderRating }
+        });
+      }
+
+      // Log audit marker for duplicate prevention
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'SUBMIT_ORDER_RATING',
+          targetType: 'ORDER',
+          targetId: orderId,
+          afterValue: JSON.stringify(data)
+        }
+      });
+
+      return {
+        orderId,
+        storeRating: data.storeRating,
+        updatedStoreRating: avgStoreRating,
+        riderRating: data.riderRating || null,
+        updatedRiderRating: avgRiderRating,
+      };
+    }, { maxWait: 15000, timeout: 15000 });
+  }
+
   // ─── Private Helper Routines ────────────────────────────────────────────────
 
   private async getUserId(customerId: string): Promise<string> {

@@ -3,7 +3,7 @@ import { orderService } from './order.service';
 import { orderRepository } from './order.repository';
 import { authRepository } from '../auth/auth.repository';
 import { sendSuccess, sendError, HttpStatus, ErrorCodes } from '../../utils/response.util';
-import { placeOrderSchema, confirmPaymentSchema, updateOrderStatusSchema, refundRequestSchema } from './order.validator';
+import { placeOrderSchema, confirmPaymentSchema, updateOrderStatusSchema, refundRequestSchema, submitRatingSchema } from './order.validator';
 import { PaymentMethod } from '@prisma/client';
 
 export class OrderController {
@@ -199,6 +199,27 @@ export class OrderController {
 
       const order = await orderService.requestRefund(orderId, customerId, reason);
       sendSuccess(res, order, 'Refund processed successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Submits store & rider ratings for a delivered order.
+   */
+  public submitOrderRatings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const orderId = req.params.id as string;
+      const parsedData = submitRatingSchema.parse(req.body);
+
+      const result = await orderService.submitOrderRatings(userId, orderId, parsedData);
+      sendSuccess(res, result, 'Ratings submitted successfully');
     } catch (error) {
       next(error);
     }

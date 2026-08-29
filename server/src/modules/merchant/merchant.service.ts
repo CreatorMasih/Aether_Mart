@@ -32,6 +32,7 @@ export class MerchantService {
         data: {
           userId,
           fullName: user.email?.split('@')[0] || user.phone || 'Store Manager',
+          isApproved: true,
         },
         include: { store: true },
       }) as any;
@@ -657,10 +658,11 @@ export class MerchantService {
         include: { rider: true },
       });
 
-      // Transition order status to CONFIRMED or update timeline
+      // Transition order status to CONFIRMED if PLACED, otherwise retain advanced status
+      const nextStatus = order.status === OrderStatus.PLACED ? OrderStatus.CONFIRMED : order.status;
       await tx.order.update({
         where: { id: orderId },
-        data: { status: OrderStatus.CONFIRMED },
+        data: { status: nextStatus },
       });
 
       // Write audit

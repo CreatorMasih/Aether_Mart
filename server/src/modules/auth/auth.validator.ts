@@ -22,7 +22,7 @@ export const verifyOtpSchema = z.object({
   identifier: z.string().min(3),
   code: z.string().length(6, 'Verification code must be exactly 6 digits'),
   role: z.enum(['CUSTOMER', 'SHOPKEEPER', 'RIDER', 'ADMIN']),
-  method: z.enum(['PHONE', 'EMAIL', 'GOOGLE', 'APPLE', 'WHATSAPP']),
+  method: z.enum(['SMS', 'PHONE', 'EMAIL', 'GOOGLE', 'APPLE', 'WHATSAPP']),
 });
 
 export const googleLoginSchema = z.object({

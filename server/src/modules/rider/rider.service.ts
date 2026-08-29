@@ -365,6 +365,32 @@ export class RiderService {
         });
       }
 
+      // Award 5% loyalty points rewards to customer upon delivery completion
+      const pointsEarned = Math.floor(order.subtotal * 0.05);
+      if (pointsEarned > 0) {
+        await tx.customer.update({
+          where: { id: order.customerId },
+          data: { loyaltyPoints: { increment: pointsEarned } },
+        });
+
+        let wallet = await tx.wallet.findUnique({ where: { customerId: order.customerId } });
+        if (!wallet) {
+          wallet = await tx.wallet.create({ data: { customerId: order.customerId, balance: 0.0 } });
+        }
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: { balance: { increment: pointsEarned } },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            amount: pointsEarned,
+            type: 'CREDIT',
+            description: `Loyalty points cashback reward for Order ID: ${order.id}`,
+          },
+        });
+      }
+
       // Transition order status to DELIVERED
       const updatedOrder = await tx.order.update({
         where: { id: orderId },

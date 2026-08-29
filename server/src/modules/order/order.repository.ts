@@ -137,17 +137,38 @@ export class OrderRepository extends BaseRepository {
       );
     }
 
-    await client.inventory.update({
-      where: { id: inventory.id },
+    // Atomic conditional update to prevent race conditions during concurrent orders
+    const invResult = await client.inventory.updateMany({
+      where: {
+        id: inventory.id,
+        stockQty: { gte: qty },
+      },
       data: { stockQty: { decrement: qty } },
     });
 
-    // Decrement variant stock
+    if (invResult.count === 0) {
+      throw new BadRequestError(
+        `Insufficient stock for item. Stock updated by another order.`,
+        ErrorCodes.OUT_OF_STOCK
+      );
+    }
+
+    // Decrement variant stock atomically
     if (variantId) {
-      await client.productVariant.update({
-        where: { id: variantId },
+      const varResult = await client.productVariant.updateMany({
+        where: {
+          id: variantId,
+          stock: { gte: qty },
+        },
         data: { stock: { decrement: qty } },
       });
+
+      if (varResult.count === 0) {
+        throw new BadRequestError(
+          `Insufficient stock for item variant. Stock updated by another order.`,
+          ErrorCodes.OUT_OF_STOCK
+        );
+      }
     }
   }
 

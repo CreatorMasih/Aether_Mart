@@ -102,6 +102,14 @@ export class CatalogService {
       where.storeId = query.storeId;
     }
 
+    // 6. Rating filter (minimum store/product rating)
+    if (query.rating !== undefined) {
+      where.store = {
+        ...where.store,
+        rating: { gte: query.rating },
+      };
+    }
+
     // 7. Dynamic Sorting
     let orderBy: any = { createdAt: 'desc' };
     if (query.sort === 'price_asc') {
@@ -110,6 +118,8 @@ export class CatalogService {
       orderBy = { price: 'desc' };
     } else if (query.sort === 'discount') {
       orderBy = { discountPrice: 'asc' };
+    } else if (query.sort === 'rating' || query.sort === 'rating_desc') {
+      orderBy = { store: { rating: 'desc' } };
     }
 
     // 8. Pagination Math

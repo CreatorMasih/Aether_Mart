@@ -31,7 +31,7 @@ export const NotServiceableState: React.FC<NotServiceableStateProps> = ({
 
       <div className="space-y-2">
         <h2 className="text-xl font-extrabold text-text-primary tracking-tight font-heading">
-          Aether Mart isn&apos;t available here yet
+          Aether Mart isn&apos;t available in your area yet.
         </h2>
         <p className="text-xs text-text-secondary leading-relaxed">
           We&apos;re currently operating exclusively in <span className="font-bold text-brand-emerald">Mahasamund, Chhattisgarh</span>. We&apos;ll be coming to <span className="font-bold text-text-primary">{currentLocationName}</span> soon!

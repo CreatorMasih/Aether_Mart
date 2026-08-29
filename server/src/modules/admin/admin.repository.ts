@@ -316,11 +316,14 @@ export class AdminRepository {
       },
     });
 
+    const totalOrders = await this.db.order.count();
+
     return {
       gmv: parseFloat(gmv.toFixed(2)),
       revenue: parseFloat(revenue.toFixed(2)),
       activeUsers: activeUsersCount.length,
       activeOrders,
+      totalOrders,
     };
   }
 

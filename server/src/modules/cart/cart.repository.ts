@@ -184,7 +184,7 @@ export class CartRepository extends BaseRepository {
       where: {
         customerId,
         couponId,
-        paymentStatus: { in: ['PAID', 'REFUNDED'] },
+        status: { not: 'CANCELLED' },
       },
     });
   }

@@ -37,3 +37,10 @@ export const updateOrderStatusSchema = z.object({
 export const refundRequestSchema = z.object({
   reason: z.string().min(5, 'Reason must be at least 5 characters long'),
 });
+
+export const submitRatingSchema = z.object({
+  storeRating: z.number().int().min(1, 'Rating must be at least 1').max(5, 'Rating max 5'),
+  storeComment: z.string().optional(),
+  riderRating: z.number().int().min(1).max(5).optional(),
+  riderComment: z.string().optional(),
+});
