@@ -88,11 +88,17 @@ export class AuthService extends BaseRepository {
     });
   }
 
+  private currentUserPromise: Promise<User> | null = null;
+
   /**
-   * Retrieves active authenticated user details
+   * Retrieves active authenticated user details (deduplicated across parallel callers)
    */
   public async getCurrentUser(): Promise<User> {
-    return this.executeRequest(async () => {
+    if (this.currentUserPromise) {
+      return this.currentUserPromise;
+    }
+
+    this.currentUserPromise = this.executeRequest(async () => {
       interface BackendResponse<T> {
         success: boolean;
         data: T;
@@ -102,7 +108,11 @@ export class AuthService extends BaseRepository {
         API_ENDPOINTS.auth.me
       );
       return response.data.data;
+    }).finally(() => {
+      this.currentUserPromise = null;
     });
+
+    return this.currentUserPromise;
   }
 
   /**

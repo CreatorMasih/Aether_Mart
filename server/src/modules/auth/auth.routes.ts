@@ -54,7 +54,7 @@ router.get('/config', authController.getConfig);
  *       429:
  *         description: Too many verification attempts
  */
-router.post('/send-otp', authRateLimiter, otpRateLimiter, validate(sendOtpSchema), authController.sendOtp);
+router.post('/send-otp', otpRateLimiter, validate(sendOtpSchema), authController.sendOtp);
 
 /**
  * @swagger

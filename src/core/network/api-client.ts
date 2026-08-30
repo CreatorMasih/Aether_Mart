@@ -31,6 +31,23 @@ apiClient.interceptors.request.use(
   }
 );
 
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
+
 // Response Interceptor: Manage token refresh and unified error mapping
 apiClient.interceptors.response.use(
   (response) => response,
@@ -46,7 +63,21 @@ apiClient.interceptors.response.use(
 
     // Handle 401 Unauthorized with single retry-once refresh flow
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            return apiClient(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
       
       try {
         const response = await axios.post(
@@ -63,12 +94,20 @@ apiClient.interceptors.response.use(
             useAuthStore.getState().setSession(currentUser, newAccessToken);
           }
           
+          processQueue(null, newAccessToken);
+          isRefreshing = false;
+
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
           }
           return apiClient(originalRequest);
+        } else {
+          throw new Error('No access token returned from refresh');
         }
       } catch (refreshError) {
+        processQueue(refreshError, null);
+        isRefreshing = false;
+
         // Refresh token invalid/expired -> Clear session safely without forced redirect loop
         const wasAuth = useAuthStore.getState().isAuthenticated;
         useAuthStore.getState().clearSession();
