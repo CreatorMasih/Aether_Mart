@@ -11,19 +11,23 @@ export const AuthScreen: React.FC = () => {
   const [step, setStep] = useState<'LOGIN' | 'OTP'>('LOGIN');
   const [identifier, setIdentifier] = useState<string>('');
   const [authMethod, setAuthMethod] = useState<'PHONE' | 'EMAIL'>('PHONE');
-  const { isAuthenticated, user, activeRole, setSession } = useAuthStore();
+  const { isAuthenticated, user, activeRole, setSession, clearSession } = useAuthStore();
   const navigate = useNavigate();
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
+      if (activeRole && user.role !== activeRole) {
+        clearSession();
+        return;
+      }
       if (user.isProfileComplete || user.fullName || user.role === 'ADMIN') {
         redirectToDashboard(user.role);
       } else {
         navigate('/auth/profile-setup');
       }
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, activeRole, navigate, clearSession]);
 
   // If no role has been selected yet (bypassed onboarding), redirect to /welcome
   useEffect(() => {

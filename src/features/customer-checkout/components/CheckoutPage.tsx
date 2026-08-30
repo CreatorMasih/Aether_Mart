@@ -416,6 +416,8 @@ export const CheckoutPage: React.FC = () => {
           coupon: null,
         });
         invalidateCart();
+        queryClient.invalidateQueries({ queryKey: queryKeys.orderHistory() });
+        queryClient.invalidateQueries({ queryKey: ['customer', 'orders'] });
         sessionStorage.removeItem('aether_pending_order');
         showToast({
           type: 'success',

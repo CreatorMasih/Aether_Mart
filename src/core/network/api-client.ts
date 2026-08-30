@@ -42,8 +42,7 @@ apiClient.interceptors.response.use(
                            originalRequest?.url?.includes('/auth/verify-otp') ||
                            originalRequest?.url?.includes('/auth/google-login') ||
                            originalRequest?.url?.includes('/auth/refresh') ||
-                           originalRequest?.url?.includes('/auth/logout') ||
-                           originalRequest?.url?.includes('/auth/me');
+                           originalRequest?.url?.includes('/auth/logout');
 
     // Handle 401 Unauthorized with single retry-once refresh flow
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
