@@ -97,7 +97,7 @@ export const LocationSelector: React.FC = () => {
   };
 
   return (
-    <div className="relative inline-block select-none">
+    <div className="relative inline-block select-none z-250">
       {/* Location Header Pill Button */}
       <button
         onClick={() => setIsDropdownOpen((prev) => !prev)}
@@ -131,9 +131,9 @@ export const LocationSelector: React.FC = () => {
       {isDropdownOpen && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
+          <div className="fixed inset-0 z-200" onClick={() => setIsDropdownOpen(false)} />
 
-          <div className="absolute left-0 top-full mt-2 w-80 sm:w-84 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="absolute left-0 top-full mt-2 w-80 sm:w-84 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-350 animate-in fade-in slide-in-from-top-2 duration-150">
             <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
               <p className="text-xs font-extrabold text-slate-900 font-heading">Your Delivery Location</p>
               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Mahasamund Only</span>

@@ -39,7 +39,7 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-sticky bg-bg-secondary/90 backdrop-blur-md border-b border-border-primary w-full px-4 py-3">
+    <header className="sticky top-0 z-100 bg-bg-secondary/90 backdrop-blur-md border-b border-border-primary w-full px-4 py-3">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         
         {/* Top line: Brand + LocationSelector + Cart Button + Notification Bell */}

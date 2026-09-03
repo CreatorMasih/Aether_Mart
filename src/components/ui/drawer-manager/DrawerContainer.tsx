@@ -161,7 +161,7 @@ export const DrawerContainer: React.FC = () => {
   return (
     <AnimatePresence>
       {activeDrawer && (
-        <div className="fixed inset-0 z-drawer flex justify-end">
+        <div className="fixed inset-0 z-9999 flex justify-end">
           {/* Backdrop overlay */}
           <motion.div
             ref={overlayRef}
@@ -169,7 +169,7 @@ export const DrawerContainer: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-overlay-bg backdrop-blur-sm pointer-events-auto"
+            className="absolute inset-0 bg-overlay-bg backdrop-blur-sm pointer-events-auto z-9998"
           />
 
           {/* Drawer container */}
@@ -182,7 +182,7 @@ export const DrawerContainer: React.FC = () => {
             role="dialog"
             aria-modal="true"
             className={cn(
-              'relative bg-bg-secondary border-border-primary shadow-high flex flex-col pointer-events-auto h-full z-base',
+              'relative bg-bg-secondary border-border-primary shadow-high flex flex-col pointer-events-auto h-full z-9999',
               isDesktop ? 'w-full max-w-md border-l' : 'w-full rounded-t-2xl border-t mt-auto h-[80vh]'
             )}
           >
