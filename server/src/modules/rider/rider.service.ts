@@ -10,6 +10,8 @@ import { ErrorCodes } from '../../utils/response.util';
 import { createModuleLogger } from '../../utils/logger';
 import { OrderStatus, DeliveryStatus, PaymentStatus, VehicleType } from '@prisma/client';
 
+import notificationService from '../../common/services/notification.service';
+
 const log = createModuleLogger('RiderService');
 
 export class RiderService {
@@ -113,13 +115,11 @@ export class RiderService {
     let rider = await riderRepository.findRiderByUserId(userId);
     if (!rider) throw new NotFoundError('Rider Profile');
 
-    // Auto-approve rider profile if pending
-    if (!rider.isApproved) {
-      rider = await riderRepository.prisma.rider.update({
-        where: { id: rider.id },
-        data: { isApproved: true },
-      });
-    }
+    // Fetch Admin-configured minimum rider payout setting
+    const minPayoutSetting = await riderRepository.prisma.appSetting.findUnique({
+      where: { key: 'MINIMUM_RIDER_PAYOUT' },
+    });
+    const configuredMinPayout = minPayoutSetting ? parseFloat(minPayoutSetting.value) : 25.0;
 
     const orders = await riderRepository.findAvailableDeliveries();
 
@@ -142,8 +142,15 @@ export class RiderService {
         { latitude: custLat, longitude: custLng }
       );
 
+      const rawFee = order.deliveryFee ?? 0;
+      const driverTip = order.driverTip ?? 0;
+      const calculatedPayout = Math.max(rawFee, configuredMinPayout) + driverTip;
+
       return {
         ...order,
+        deliveryFee: Math.max(rawFee, configuredMinPayout),
+        driverTip,
+        estimatedPayout: calculatedPayout,
         store: order.store ? {
           ...order.store,
           latitude: storeLat,
@@ -170,7 +177,7 @@ export class RiderService {
     });
 
     log.info(
-      `[Rider Deliveries] riderId=${rider.id}, riderRole=RIDER, riderOnlineStatus=${rider.isOnline}, riderLat=${validRiderLat}, riderLng=${validRiderLng}, count=${mapped.length}`
+      `[Rider Deliveries] riderId=${rider.id}, riderRole=RIDER, minPayout=₹${configuredMinPayout}, riderLat=${validRiderLat}, riderLng=${validRiderLng}, count=${mapped.length}`
     );
 
     return mapped.sort((a: any, b: any) => a.distanceToStoreKm - b.distanceToStoreKm);
@@ -184,10 +191,7 @@ export class RiderService {
     if (!rider) throw new NotFoundError('Rider Profile');
 
     if (!rider.isApproved) {
-      rider = await riderRepository.prisma.rider.update({
-        where: { id: rider.id },
-        data: { isApproved: true },
-      });
+      throw new ForbiddenError('Your rider account is pending verification by Admin. You cannot accept delivery jobs until verified.');
     }
 
     let assignment = await riderRepository.findActiveAssignment(rider.id, orderId);
@@ -347,8 +351,10 @@ export class RiderService {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) throw new NotFoundError('Order');
 
-      // 1. Calculate rider earnings for this shipment (deliveryFee + driverTip)
-      const earnings = order.deliveryFee + (order.driverTip || 0);
+      // 1. Calculate rider earnings for this shipment using Admin-configured MINIMUM_RIDER_PAYOUT
+      const minPayoutSetting = await tx.appSetting.findUnique({ where: { key: 'MINIMUM_RIDER_PAYOUT' } });
+      const configuredMinPayout = minPayoutSetting ? parseFloat(minPayoutSetting.value) : 25.0;
+      const earnings = Math.max(order.deliveryFee || 0, configuredMinPayout) + (order.driverTip || 0);
 
       // 2. Increment rider balance
       await tx.rider.update({
@@ -398,11 +404,20 @@ export class RiderService {
         include: { store: true, items: true },
       });
 
-      return { assignment: updatedAss, order: updatedOrder };
+      return { assignment: updatedAss, order: updatedOrder, earnings };
     }, { maxWait: 15000, timeout: 15000 });
 
     // Emit delivered event
     orderEventEmitter.emitEvent(OrderEvent.DELIVERED, { order: result.order });
+
+    // Create persisted notification for Rider
+    await notificationService.createNotification({
+      userId: rider.userId,
+      title: 'Delivery Completed & Earnings Credited',
+      body: `Order #${result.order.orderNumber} delivered successfully. Credited ₹${result.earnings} to your wallet.`,
+      type: 'RIDER_JOB_DELIVERED',
+      data: { orderId, orderNumber: result.order.orderNumber, earnings: result.earnings },
+    });
 
     return result.assignment;
   }
@@ -502,6 +517,20 @@ export class RiderService {
       status: payout.status,
       date: payout.createdAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
     };
+  }
+
+  /**
+   * Retrieves persisted notifications for a rider.
+   */
+  public async getNotifications(userId: string): Promise<any[]> {
+    return notificationService.getUserNotifications(userId);
+  }
+
+  /**
+   * Marks a notification as read.
+   */
+  public async markNotificationRead(userId: string, notificationId: string): Promise<void> {
+    return notificationService.markAsRead(notificationId, userId);
   }
 }
 

@@ -167,6 +167,37 @@ export class RiderController {
       next(error);
     }
   };
+
+  public getNotifications = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const notifications = await riderService.getNotifications(userId);
+      sendSuccess(res, notifications, 'Rider notifications retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public markNotificationRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        sendError(res, 'Authentication required', HttpStatus.UNAUTHORIZED, ErrorCodes.TOKEN_MISSING);
+        return;
+      }
+
+      const notificationId = req.params.id as string;
+      await riderService.markNotificationRead(userId, notificationId);
+      sendSuccess(res, { success: true }, 'Notification marked as read');
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const riderController = new RiderController();

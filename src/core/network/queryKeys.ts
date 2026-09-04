@@ -32,7 +32,7 @@ export const queryKeys = {
 
   // ─── Rider query keys ───────────────────────────────────────────────────────
   riderEarnings: () => ['rider', 'earnings'] as const,
-  riderAvailableJobs: (lat?: number, lng?: number) => ['rider', 'availableJobs', lat, lng] as const,
+  riderAvailableJobs: (_lat?: number, _lng?: number) => ['rider', 'availableJobs'] as const,
   riderAssignments: () => ['rider', 'assignments'] as const,
 
   // ─── Admin query keys ───────────────────────────────────────────────────────

@@ -6,9 +6,7 @@ import {
   Clock, 
   Wallet, 
   ShieldAlert, 
-  FileCheck, 
-  Play,
-  Square
+  FileCheck
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../../core/network/queryKeys';
@@ -22,10 +20,11 @@ export const RiderDashboard: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'JOBS' | 'EARNINGS' | 'DOCS'>('JOBS');
+  const [activeTab, setActiveTab] = useState<'JOBS' | 'ACTIVE' | 'HISTORY' | 'EARNINGS' | 'DOCS'>('JOBS');
 
   // Geolocation states (Default to Mahasamund platform service area)
   const [coords, setCoords] = useState<{ lat: number; lng: number }>({ lat: 21.1085, lng: 82.0965 });
+  const lastHeartbeatTimeRef = React.useRef<number>(0);
 
   // 1. Queries
   const { data: profileMe } = useQuery({
@@ -40,7 +39,7 @@ export const RiderDashboard: React.FC = () => {
   const isOnline = rider?.isOnline ?? false;
   const shiftActive = isOnline; // Shift status maps to online status
 
-  // Real GPS watch position on load & online shift
+  // Throttled GPS watch position on load & online shift (max once per 20 seconds)
   useEffect(() => {
     if (!navigator.geolocation) return;
 
@@ -49,14 +48,17 @@ export const RiderDashboard: React.FC = () => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         setCoords({ lat, lng });
-        if (isOnline) {
+
+        const now = Date.now();
+        if (isOnline && (now - lastHeartbeatTimeRef.current > 20000)) {
+          lastHeartbeatTimeRef.current = now;
           riderService.sendHeartbeat(lat, lng, true).catch(console.error);
         }
       },
       (err) => {
         console.warn('[Rider GPS Watch] Location warning:', err.message);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
@@ -69,9 +71,9 @@ export const RiderDashboard: React.FC = () => {
   });
 
   const { data: availableDeliveries } = useQuery({
-    queryKey: queryKeys.riderAvailableJobs(coords.lat, coords.lng),
+    queryKey: queryKeys.riderAvailableJobs(),
     queryFn: () => riderService.getAvailableDeliveries(coords.lat, coords.lng),
-    refetchInterval: 5000, // Poll available jobs every 5 seconds when online
+    refetchInterval: 15000, // Poll available jobs every 15 seconds when online
     enabled: isOnline && !!rider?.id && profileMe?.role === 'RIDER',
   });
 
@@ -84,9 +86,13 @@ export const RiderDashboard: React.FC = () => {
   const assignmentsList = assignmentsData ?? [];
   const availableJobsList = availableDeliveries ?? [];
 
-  // Find active assignment
+  // Separate Active Assignment vs Completed Delivery History
   const activeJob = assignmentsList.find((ass) => 
     ['ASSIGNED', 'ACCEPTED', 'PICKED_UP'].includes(ass.status)
+  );
+
+  const completedHistory = assignmentsList.filter((ass) =>
+    ['DELIVERED', 'CANCELLED'].includes(ass.status)
   );
 
   // 2. Mutations
@@ -99,7 +105,7 @@ export const RiderDashboard: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      queryClient.invalidateQueries({ queryKey: queryKeys.riderAvailableJobs(coords.lat, coords.lng) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderAvailableJobs() });
       showToast({
         type: 'success',
         title: 'Duty Status Updated',
@@ -119,6 +125,7 @@ export const RiderDashboard: React.FC = () => {
     mutationFn: (orderId: string) => riderService.acceptDelivery(orderId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.riderAssignments() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.riderAvailableJobs() });
       showToast({
         type: 'success',
         title: 'Delivery Accepted',
@@ -158,6 +165,10 @@ export const RiderDashboard: React.FC = () => {
     alert('🚨 EMERGENCY SOS ACTIVATED. Alerting nearest dispatch agent and transmitting current coordinates.');
   };
 
+  const handleToggleDuty = () => {
+    toggleDutyMutation.mutate(!isOnline);
+  };
+
   const handleAccept = (orderId: string) => {
     acceptJobMutation.mutate(orderId);
   };
@@ -166,90 +177,69 @@ export const RiderDashboard: React.FC = () => {
     payoutMutation.mutate();
   };
 
-  if (earningsLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center text-xs font-semibold text-text-secondary select-none">
-        Loading rider profile and metrics...
-      </div>
-    );
-  }
-
-  const todayEarnings = earningsData?.todayEarnings ?? 0;
-  const completedCount = earningsData?.completedCount ?? 0;
-  const rating = earningsData?.rating ?? 5.0;
-  const currentBalance = earningsData?.balance ?? 0;
+  const currentBalance = earningsData?.balance ?? rider?.balance ?? 0;
   const payoutHistoryList = earningsData?.payoutHistory ?? [];
 
   return (
-    <div className="space-y-6 pb-16 text-xs font-semibold text-text-secondary select-none max-w-lg mx-auto">
-      
-      {/* 1. Header with Shift & Online Controls */}
-      <div className="p-5 rounded-2xl border border-border-primary bg-bg-secondary space-y-4 shadow-subtle">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-sm font-extrabold text-text-primary tracking-tight font-heading">Aether Partner</h2>
-            <span className="text-[9px] text-text-secondary uppercase mt-0.5 block font-bold tracking-wider">
-              {shiftActive ? 'Shift active & online' : 'Shift Offline'}
-            </span>
+    <div className="p-4 space-y-4 max-w-lg mx-auto pb-24">
+      {/* Header Profile Info & Shift Duty Toggle */}
+      <div className="p-4 rounded-2xl border border-border-primary bg-bg-secondary flex justify-between items-center shadow-subtle">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-heading font-extrabold text-sm border border-emerald-500/20">
+            {rider?.fullName?.[0] || 'R'}
           </div>
-          
-          <button
-            onClick={() => toggleDutyMutation.mutate(!isOnline)}
-            disabled={toggleDutyMutation.isPending}
-            className={cn(
-              "px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2",
-              isOnline 
-                ? "bg-brand-emerald text-white shadow-emerald" 
-                : "bg-bg-tertiary text-text-secondary border border-border-primary"
-            )}
-          >
-            <Power className="h-4 w-4" />
-            {isOnline ? 'Online' : 'Offline'}
-          </button>
+          <div>
+            <h3 className="font-heading font-extrabold text-text-primary text-sm leading-tight">{rider?.fullName || 'Delivery Partner'}</h3>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-text-secondary font-bold uppercase">{rider?.vehicleType || 'MOTORBIKE'}</span>
+              <span className="text-[10px] text-text-tertiary">•</span>
+              <div className="flex items-center text-amber-500 font-bold text-[10px]">
+                <Star className="h-3 w-3 fill-amber-500 text-amber-500 mr-0.5" />
+                <span>{rider?.rating?.toFixed(1) || '5.0'}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Start/Stop Shift button */}
         <button
-          onClick={() => toggleDutyMutation.mutate(!isOnline)}
+          onClick={handleToggleDuty}
           disabled={toggleDutyMutation.isPending}
           className={cn(
-            "w-full py-3.5 rounded-xl font-bold transition-all cursor-pointer flex items-center justify-center gap-2",
-            shiftActive 
-              ? "bg-status-error/10 hover:bg-status-error/15 text-status-error border border-status-error/20" 
-              : "bg-brand-emerald hover:bg-brand-emerald-hover text-white shadow-emerald"
+            "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 border shadow-xs",
+            isOnline 
+              ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500" 
+              : "bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
           )}
         >
-          {shiftActive ? (
-            <>
-              <Square className="h-4 w-4 fill-current" /> Stop Active Shift
-            </>
-          ) : (
-            <>
-              <Play className="h-4 w-4 fill-current" /> Start Shift Duty
-            </>
-          )}
+          <Power className="h-3.5 w-3.5" />
+          <span>{toggleDutyMutation.isPending ? 'Updating...' : isOnline ? 'DUTY ONLINE' : 'GO ONLINE'}</span>
         </button>
       </div>
 
-      {/* 2. Critical Stats Widgets */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="p-3.5 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-20 text-center">
-          <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Today's Earnings</span>
-          <span className="text-base font-extrabold text-emerald-700 font-heading mt-1">{formatCurrency(todayEarnings)}</span>
+      {/* Stats Quick Cards */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="p-3.5 rounded-xl border border-border-primary/60 bg-bg-secondary flex items-center justify-between shadow-subtle">
+          <div>
+            <span className="text-[9px] font-bold text-text-secondary uppercase tracking-wider block">Today's Earnings</span>
+            <span className="text-base font-extrabold text-emerald-700 font-heading block mt-0.5">
+              {earningsLoading ? '...' : formatCurrency(earningsData?.todayEarnings ?? 0)}
+            </span>
+          </div>
+          <Wallet className="h-5 w-5 text-emerald-600 opacity-80" />
         </div>
-        <div className="p-3.5 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-20 text-center">
-          <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Today Completed</span>
-          <span className="text-base font-extrabold text-text-primary font-heading mt-1">{earningsData?.todayCompletedCount ?? completedCount}</span>
-        </div>
-        <div className="p-3.5 rounded-xl border border-border-primary bg-bg-secondary flex flex-col justify-between h-20 text-center">
-          <span className="text-[9px] text-text-secondary uppercase block font-bold tracking-wider">Rating</span>
-          <span className="text-base font-extrabold text-text-primary font-heading mt-1 flex items-center justify-center gap-0.5">
-            {rating} <Star className="h-4 w-4 fill-emerald-500 text-emerald-500" />
-          </span>
+
+        <div className="p-3.5 rounded-xl border border-border-primary/60 bg-bg-secondary flex items-center justify-between shadow-subtle">
+          <div>
+            <span className="text-[9px] font-bold text-text-secondary uppercase tracking-wider block">Delivered Today</span>
+            <span className="text-base font-extrabold text-text-primary font-heading block mt-0.5">
+              {earningsLoading ? '...' : (earningsData?.todayCompletedCount ?? 0)} Orders
+            </span>
+          </div>
+          <Clock className="h-5 w-5 text-emerald-600 opacity-80" />
         </div>
       </div>
 
-      {/* SOS Button widget (outdoor high safety trigger) */}
+      {/* SOS & Active Order Banner */}
       <div className="flex gap-2">
         <button
           onClick={handleSOS}
@@ -260,25 +250,27 @@ export const RiderDashboard: React.FC = () => {
         {activeJob && (
           <button
             onClick={() => navigate('/r/active')}
-            className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl cursor-pointer shadow-subtle flex items-center justify-center gap-2 text-xs uppercase"
+            className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl cursor-pointer shadow-subtle flex items-center justify-center gap-2 text-xs uppercase animate-pulse"
           >
-            Active Order
+            Active Order ({activeJob.status})
           </button>
         )}
       </div>
 
       {/* 3. Navigation Tabs */}
-      <div className="flex border-b border-border-primary/60 p-1 bg-bg-secondary/40 rounded-xl gap-1">
+      <div className="flex border-b border-border-primary/60 p-1 bg-bg-secondary/40 rounded-xl gap-1 overflow-x-auto">
         {[
-          { id: 'JOBS', label: 'Delivery Jobs' },
-          { id: 'EARNINGS', label: 'Ledger Logs' },
-          { id: 'DOCS', label: 'Verified Docs' }
+          { id: 'JOBS', label: `Jobs (${availableJobsList.length})` },
+          { id: 'ACTIVE', label: activeJob ? `Active (1)` : 'Active (0)' },
+          { id: 'HISTORY', label: `History (${completedHistory.length})` },
+          { id: 'EARNINGS', label: 'Ledger' },
+          { id: 'DOCS', label: 'Docs' }
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "flex-1 py-2.5 rounded-lg text-xs font-bold cursor-pointer transition-all",
+              "flex-1 py-2 rounded-lg text-xs font-bold cursor-pointer transition-all whitespace-nowrap px-2.5",
               activeTab === tab.id 
                 ? "bg-emerald-600 text-white shadow-sm" 
                 : "text-text-secondary hover:text-text-primary"
@@ -301,98 +293,152 @@ export const RiderDashboard: React.FC = () => {
               </div>
             ) : availableJobsList.length === 0 ? (
               <div className="p-8 text-center border border-dashed border-border-primary rounded-2xl bg-bg-secondary text-text-secondary">
-                🌱 Polling active jobs... Standing by for nearby order dispatches.
+                🌱 Standing by for nearby READY_FOR_PICKUP orders...
               </div>
             ) : (
               <div className="space-y-3">
-                {availableJobsList.map((job) => (
-                  <div key={job.id} className="p-4 rounded-2xl border border-border-primary bg-bg-secondary space-y-3 shadow-subtle">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="text-[9px] font-extrabold px-2 py-0.5 bg-emerald-500/10 text-emerald-700 rounded uppercase tracking-wider font-heading">
-                          NEW DELIVERY • #{job.orderNumber}
-                        </span>
-                        <h4 className="font-extrabold text-text-primary text-sm mt-1">{job.storeName || job.store?.name || 'Aether Store'}</h4>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-base font-extrabold text-emerald-700 font-heading">
-                          {formatCurrency(job.deliveryFee + job.driverTip)}
-                        </span>
-                        <span className="text-[9px] text-text-secondary block font-semibold">Est. Earnings</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 text-xs text-text-secondary bg-bg-tertiary p-3 rounded-xl border border-border-primary/50">
-                      <div className="flex items-start gap-2">
-                        <span className="text-sm">🏪</span>
+                {availableJobsList.map((job) => {
+                  const estPayout = (job.deliveryFee || 25) + (job.driverTip || 0);
+                  return (
+                    <div key={job.id} className="p-4 rounded-2xl border border-border-primary bg-bg-secondary space-y-3 shadow-subtle">
+                      <div className="flex justify-between items-start">
                         <div>
-                          <span className="font-bold text-text-primary block text-[11px]">STORE PICKUP</span>
-                          <span className="text-[10px] text-text-secondary">{job.store?.address || job.storeName || 'Store Location'}</span>
-                        </div>
-                      </div>
-                      <div className="border-t border-border-primary/40 pt-1.5 flex items-start gap-2">
-                        <span className="text-sm">🏠</span>
-                        <div>
-                          <span className="font-bold text-text-primary block text-[11px]">CUSTOMER DROP</span>
-                          <span className="text-[10px] text-text-secondary">
-                            {job.deliveryAddress?.receiverName ? `${job.deliveryAddress.receiverName} — ` : ''}
-                            {job.deliveryAddress?.streetAddress || 'Customer Address'}
+                          <span className="text-[9px] font-extrabold px-2 py-0.5 bg-emerald-500/10 text-emerald-700 rounded uppercase tracking-wider font-heading">
+                            READY FOR PICKUP • #{job.orderNumber}
                           </span>
+                          <h4 className="font-extrabold text-text-primary text-sm mt-1">{job.storeName || job.store?.name || 'Aether Store'}</h4>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-base font-extrabold text-emerald-700 font-heading">
+                            {formatCurrency(estPayout)}
+                          </span>
+                          <span className="text-[9px] text-text-secondary block font-semibold">Est. Payout</span>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex justify-between items-center pt-2 border-t border-border-primary/60 text-xs">
-                      <span className="text-text-secondary font-extrabold uppercase text-[10px]">
-                        {job.distanceToStoreKm ? `📍 ${job.distanceToStoreKm} km to store` : '📍 Nearby Pickup'}
-                      </span>
-                      <button
-                        onClick={() => handleAccept(job.id)}
-                        disabled={acceptJobMutation.isPending}
-                        className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold cursor-pointer disabled:opacity-50 text-xs border border-emerald-500 shadow-sm"
-                      >
-                        {acceptJobMutation.isPending ? 'Accepting...' : 'ACCEPT DELIVERY'}
-                      </button>
+                      <div className="space-y-2 text-xs text-text-secondary bg-bg-tertiary p-3 rounded-xl border border-border-primary/50">
+                        <div className="flex items-start gap-2">
+                          <span className="text-sm">🏪</span>
+                          <div>
+                            <span className="font-bold text-text-primary block text-[11px]">STORE PICKUP</span>
+                            <span className="text-[10px] text-text-secondary">{job.store?.address || job.storeName || 'Store Location'}</span>
+                          </div>
+                        </div>
+                        <div className="border-t border-border-primary/40 pt-1.5 flex items-start gap-2">
+                          <span className="text-sm">🏠</span>
+                          <div>
+                            <span className="font-bold text-text-primary block text-[11px]">CUSTOMER DROP</span>
+                            <span className="text-[10px] text-text-secondary">
+                              {job.deliveryAddress?.receiverName ? `${job.deliveryAddress.receiverName} — ` : ''}
+                              {job.deliveryAddress?.streetAddress || 'Customer Address'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2 border-t border-border-primary/60 text-xs">
+                        <span className="text-text-secondary font-extrabold uppercase text-[10px]">
+                          {job.distanceToStoreKm ? `📍 ${job.distanceToStoreKm} km to store` : '📍 Nearby Pickup'}
+                        </span>
+                        <button
+                          onClick={() => handleAccept(job.id)}
+                          disabled={acceptJobMutation.isPending}
+                          className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold cursor-pointer disabled:opacity-50 text-xs border border-emerald-500 shadow-sm"
+                        >
+                          {acceptJobMutation.isPending ? 'Accepting...' : 'ACCEPT DELIVERY'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
+          </div>
+        )}
 
-            {/* Persistent Completed Deliveries History List */}
-            {assignmentsList.filter((a) => a.status === 'DELIVERED').length > 0 && (
-              <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-50/40 space-y-3 mt-4">
-                <h4 className="font-extrabold text-emerald-900 text-xs uppercase tracking-wider flex items-center justify-between border-b border-emerald-200 pb-2">
-                  <span>✓ Completed Deliveries History</span>
-                  <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] rounded-full font-bold">
-                    {assignmentsList.filter((a) => a.status === 'DELIVERED').length} Total
-                  </span>
-                </h4>
+        {activeTab === 'ACTIVE' && (
+          <div className="space-y-4">
+            {!activeJob ? (
+              <div className="p-8 text-center border border-dashed border-border-primary rounded-2xl bg-bg-secondary text-text-secondary space-y-2">
+                <Clock className="h-8 w-8 text-text-secondary mx-auto" />
+                <h4 className="font-extrabold text-text-primary text-xs">No Active Delivery</h4>
+                <p className="text-[10px] leading-relaxed">Accept an available job from the Jobs tab to start a delivery shift.</p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl border border-emerald-500/40 bg-emerald-50/20 space-y-3 shadow-subtle">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[9px] font-extrabold px-2 py-0.5 bg-emerald-600 text-white rounded uppercase tracking-wider font-heading">
+                      ACTIVE • #{activeJob.order?.orderNumber || activeJob.orderId.slice(0, 8)}
+                    </span>
+                    <h4 className="font-extrabold text-text-primary text-sm mt-1">{activeJob.order?.store?.name || 'Aether Store'}</h4>
+                  </div>
+                  <button
+                    onClick={() => navigate('/r/active')}
+                    className="py-2 px-4 bg-emerald-600 text-white font-bold rounded-xl text-xs cursor-pointer"
+                  >
+                    Manage Active Order
+                  </button>
+                </div>
+                <div className="text-xs text-text-secondary">
+                  Status: <span className="font-bold text-emerald-700">{activeJob.status}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-                <div className="space-y-2">
-                  {assignmentsList
-                    .filter((a) => a.status === 'DELIVERED')
-                    .map((ass) => (
-                      <div key={ass.id} className="p-3 bg-white border border-emerald-200 rounded-xl flex items-center justify-between shadow-xs">
+        {activeTab === 'HISTORY' && (
+          <div className="space-y-4">
+            <h4 className="font-extrabold text-text-primary text-xs uppercase tracking-wider border-b border-border-primary/60 pb-2">
+              Completed Delivery History ({completedHistory.length})
+            </h4>
+
+            {completedHistory.length === 0 ? (
+              <div className="p-8 text-center border border-dashed border-border-primary rounded-2xl bg-bg-secondary text-text-secondary">
+                No completed delivery assignments yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {completedHistory.map((ass) => {
+                  const isDelivered = ass.status === 'DELIVERED';
+                  const earnedPayout = (ass.order?.deliveryFee || 25) + (ass.order?.driverTip || 0);
+                  return (
+                    <div key={ass.id} className="p-4 rounded-2xl border border-border-primary bg-bg-secondary space-y-3 shadow-subtle">
+                      <div className="flex justify-between items-start">
                         <div>
-                          <span className="font-extrabold text-slate-900 text-xs block">
-                            Order #{ass.order?.orderNumber || ass.orderId.slice(0, 8)}
+                          <span className={cn(
+                            "text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider font-heading",
+                            isDelivered ? "bg-emerald-500/10 text-emerald-700" : "bg-red-500/10 text-red-700"
+                          )}>
+                            {ass.status} • #{ass.order?.orderNumber || ass.orderId.slice(0, 8)}
                           </span>
-                          <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
-                            {ass.order?.store?.name || 'Aether Store'} • {ass.deliveredAt ? new Date(ass.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Completed'}
+                          <h4 className="font-extrabold text-text-primary text-sm mt-1">{ass.order?.store?.name || 'Aether Store'}</h4>
+                          <span className="text-[10px] text-text-tertiary block mt-0.5">
+                            {ass.deliveredAt ? new Date(ass.deliveredAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Historical'}
                           </span>
                         </div>
                         <div className="text-right">
-                          <span className="font-extrabold text-emerald-700 text-xs block">
-                            +{formatCurrency((ass.order?.deliveryFee || 25) + (ass.order?.driverTip || 0))}
+                          <span className="text-base font-extrabold text-emerald-700 font-heading block">
+                            +{formatCurrency(earnedPayout)}
                           </span>
-                          <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block mt-0.5">
-                            ✓ DELIVERED
-                          </span>
+                          <span className="text-[9px] text-text-secondary block font-semibold">Credited Payout</span>
                         </div>
                       </div>
-                    ))}
-                </div>
+
+                      <div className="space-y-1.5 text-xs text-text-secondary bg-bg-tertiary p-3 rounded-xl border border-border-primary/50">
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs">🏪</span>
+                          <span className="text-[10px]">{ass.order?.store?.address || 'Store Location'}</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-xs">🏠</span>
+                          <span className="text-[10px]">{ass.order?.deliveryAddress?.streetAddress || 'Customer Address'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -400,7 +446,6 @@ export const RiderDashboard: React.FC = () => {
 
         {activeTab === 'EARNINGS' && (
           <div className="space-y-4">
-            {/* Wallet summary */}
             <div className="p-4 rounded-xl bg-bg-tertiary border border-border-primary flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Wallet className="h-6 w-6 text-brand-emerald" />
@@ -418,7 +463,6 @@ export const RiderDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Payout history lists */}
             <div className="space-y-2">
               <span className="text-[9px] text-text-secondary uppercase font-bold tracking-wider block">Past Payout logs</span>
               <div className="divide-y divide-border-primary border border-border-primary rounded-xl overflow-hidden bg-bg-secondary">
@@ -449,8 +493,6 @@ export const RiderDashboard: React.FC = () => {
             <h3 className="text-xs font-bold text-text-primary uppercase border-b border-border-primary/60 pb-2">Verification Documents</h3>
             
             <div className="space-y-3.5">
-              
-              {/* License Row */}
               <div className="flex items-center justify-between border-b border-border-primary/60 pb-3">
                 <div>
                   <span className="font-bold text-text-primary block">Driving License</span>

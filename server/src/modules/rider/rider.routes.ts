@@ -24,4 +24,8 @@ router.post('/deliveries/:orderId/accept', riderController.acceptDelivery);
 router.post('/deliveries/:orderId/pickup', riderController.confirmPickup);
 router.post('/deliveries/:orderId/complete', riderController.confirmDelivery);
 
+// Notifications
+router.get('/notifications', riderController.getNotifications);
+router.put('/notifications/:id/read', riderController.markNotificationRead);
+
 export default router;

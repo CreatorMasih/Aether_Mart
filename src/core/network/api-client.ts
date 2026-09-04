@@ -53,15 +53,17 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const requestUrl = originalRequest?.url || '';
     
     // Exclude auth & session endpoints to prevent infinite refresh loops
-    const isAuthEndpoint = originalRequest?.url?.includes('/auth/login') || 
-                           originalRequest?.url?.includes('/auth/verify-otp') ||
-                           originalRequest?.url?.includes('/auth/google-login') ||
-                           originalRequest?.url?.includes('/auth/refresh') ||
-                           originalRequest?.url?.includes('/auth/logout');
+    const isAuthEndpoint = requestUrl.includes('/auth/send-otp') ||
+                           requestUrl.includes('/auth/verify-otp') ||
+                           requestUrl.includes('/auth/google-login') ||
+                           requestUrl.includes('/auth/refresh') ||
+                           requestUrl.includes('/auth/config') ||
+                           requestUrl.includes('/auth/logout');
 
-    // Handle 401 Unauthorized with single retry-once refresh flow
+    // Strictly handle 401 Unauthorized (never 429, 400, 403, 422, 409)
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -71,6 +73,7 @@ apiClient.interceptors.response.use(
             if (originalRequest.headers) {
               originalRequest.headers.Authorization = `Bearer ${token}`;
             }
+            originalRequest._retry = true; // Prevent infinite loop if retried request receives 401 again
             return apiClient(originalRequest);
           })
           .catch((err) => Promise.reject(err));
@@ -127,7 +130,7 @@ apiClient.interceptors.response.use(
     const retryAfterSeconds = errorData?.details?.retryAfterSeconds || (parsedHeaderSec && !isNaN(parsedHeaderSec) ? parsedHeaderSec : undefined);
 
     const mappedError = {
-      message: errorData?.message || 'An unexpected connection error occurred.',
+      message: errorData?.message || (error.response?.status === 429 ? 'Too many requests. Please try again later.' : 'An unexpected connection error occurred.'),
       status: error.response?.status || 500,
       code: errorData?.code || (error.response?.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'NETWORK_ERROR'),
       details: errorData?.details || null,

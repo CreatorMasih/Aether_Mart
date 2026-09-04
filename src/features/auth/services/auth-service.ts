@@ -18,11 +18,21 @@ export interface AuthConfigDTO {
 }
 
 export class AuthService extends BaseRepository {
+  private cachedAuthConfig: AuthConfigDTO | null = null;
+  private authConfigPromise: Promise<AuthConfigDTO> | null = null;
+
   /**
-   * Retrieves safe auth configuration (OTP mode)
+   * Retrieves safe auth configuration (OTP mode), cached in-memory per session.
    */
   public async getAuthConfig(): Promise<AuthConfigDTO> {
-    return this.executeRequest(async () => {
+    if (this.cachedAuthConfig) {
+      return this.cachedAuthConfig;
+    }
+    if (this.authConfigPromise) {
+      return this.authConfigPromise;
+    }
+
+    this.authConfigPromise = this.executeRequest(async () => {
       interface BackendResponse<T> {
         success: boolean;
         data: T;
@@ -31,8 +41,13 @@ export class AuthService extends BaseRepository {
       const response = await this.client.get<BackendResponse<AuthConfigDTO>>(
         '/auth/config'
       );
+      this.cachedAuthConfig = response.data.data;
       return response.data.data;
+    }).finally(() => {
+      this.authConfigPromise = null;
     });
+
+    return this.authConfigPromise;
   }
   /**
    * Triggers OTP delivery to SMS/Email

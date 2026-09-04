@@ -6,6 +6,7 @@ import { verifyAccessToken } from '../utils/jwt.util';
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database.config';
 import { orderEventEmitter, OrderEvent } from '../common/events/order-event.emitter';
+import notificationService from '../common/services/notification.service';
 
 let io: Server;
 const lastLocationTime = new Map<string, number>();
@@ -48,6 +49,29 @@ function setupDomainEventListeners(): void {
       // Notify merchant about new orders instantly
       if (event === OrderEvent.PLACED) {
         io.to(`store:${order.storeId}`).emit('merchant:new_order', order);
+      }
+
+      // Notify online & approved riders about new ready for pickup jobs
+      if (event === OrderEvent.READY_FOR_PICKUP) {
+        io.to('riders').emit('rider:new_job_available', order);
+        (async () => {
+          try {
+            const onlineRiders = await prisma.rider.findMany({
+              where: { isOnline: true, isApproved: true },
+            });
+            for (const r of onlineRiders) {
+              await notificationService.createNotification({
+                userId: r.userId,
+                title: 'New Delivery Job Available',
+                body: `Order #${order.orderNumber} is ready for pickup.`,
+                type: 'RIDER_JOB_AVAILABLE',
+                data: { orderId: order.id, orderNumber: order.orderNumber },
+              });
+            }
+          } catch (e) {
+            logger.error('Failed to dispatch ready for pickup rider notifications', { error: e });
+          }
+        })();
       }
 
       // Notify admins about all platform events

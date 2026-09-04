@@ -62,7 +62,7 @@ export class RiderRepository extends BaseRepository {
   public async findAvailableDeliveries(): Promise<Order[]> {
     return this.db.order.findMany({
       where: {
-        status: { in: [OrderStatus.READY_FOR_PICKUP, OrderStatus.PACKING] },
+        status: OrderStatus.READY_FOR_PICKUP,
         OR: [
           { deliveryAssignment: null },
           {
@@ -77,6 +77,7 @@ export class RiderRepository extends BaseRepository {
         deliveryAddress: true,
         items: true,
       },
+      orderBy: { createdAt: 'desc' },
     }) as any;
   }
 

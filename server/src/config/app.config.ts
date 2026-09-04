@@ -74,8 +74,16 @@ export function createApp(): Application {
 
   app.use(compression());
 
-  // ── Trust Proxy (for correct IP behind Vercel / Render / Nginx reverse proxies) ─
-  app.set('trust proxy', true);
+  // ── Trust Proxy Configuration ────────────────────────────────────────────────
+  // Configured specifically for 1 reverse proxy hop (Render / Vercel / Nginx)
+  // or customized via TRUST_PROXY env variable ('loopback', 1, etc.).
+  // This prevents malicious clients from spoofing X-Forwarded-For headers.
+  const envTrustProxy = process.env.TRUST_PROXY;
+  const trustProxySetting = envTrustProxy
+    ? (!isNaN(Number(envTrustProxy)) ? Number(envTrustProxy) : envTrustProxy)
+    : 1; // Default to 1 hop (Render reverse proxy standard)
+
+  app.set('trust proxy', trustProxySetting);
 
   // ── Request Logging ────────────────────────────────────────────────────────
 

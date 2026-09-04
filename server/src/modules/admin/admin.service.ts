@@ -3,6 +3,8 @@ import { UserStatus, UserRole } from '@prisma/client';
 import { NotFoundError, BadRequestError } from '../../common/middlewares/errorHandler.middleware';
 import { createModuleLogger } from '../../utils/logger';
 
+import notificationService from '../../common/services/notification.service';
+
 const log = createModuleLogger('AdminService');
 
 export class AdminService {
@@ -93,7 +95,8 @@ export class AdminService {
     adminUserId: string,
     riderId: string,
     approve: boolean,
-    ipAddress: string
+    ipAddress: string,
+    rejectionReason?: string
   ): Promise<any> {
     const rider = await adminRepository.findRiderById(riderId);
     if (!rider) throw new NotFoundError('Rider profile');
@@ -107,8 +110,19 @@ export class AdminService {
       targetType: 'Rider',
       targetId: riderId,
       beforeValue: { isApproved: rider.isApproved },
-      afterValue: { isApproved: updated.isApproved },
+      afterValue: { isApproved: updated.isApproved, rejectionReason },
       ipAddress,
+    });
+
+    // Create persisted notification for Rider
+    await notificationService.createNotification({
+      userId: rider.userId,
+      title: approve ? 'Rider Verification Approved' : 'Rider Verification Rejected',
+      body: approve
+        ? 'Your rider account and verification documents have been approved by Admin. You are now authorized to go online and accept delivery jobs.'
+        : `Your rider verification was rejected by Admin.${rejectionReason ? ` Reason: ${rejectionReason}` : ' Please check your profile and re-upload valid documents.'}`,
+      type: 'RIDER_VERIFICATION_STATUS',
+      data: { isApproved: approve, rejectionReason: rejectionReason || null },
     });
 
     log.info(`Admin ${adminUserId} set approval of Rider ${riderId} to ${approve}`);
