@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, Store, Bike, ShieldAlert, ArrowRight, ArrowLeft } from 'lucide-react';
+import { ShoppingBag, Store, Bike, ShieldAlert, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { useAuthStore } from '../store/auth-store';
 import { USER_ROLES } from '../../../core/config/constants';
 import type { UserRole } from '../../../core/config/constants';
@@ -122,37 +122,41 @@ export const OnboardingScreen: React.FC = () => {
               </motion.div>
             </AnimatePresence>
 
-            {/* Slider Dots */}
-            <div className="flex items-center gap-1.5 mt-8">
-              {ONBOARDING_SLIDES.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setActiveSlide(idx)}
-                  className={cn(
-                    "h-1.5 rounded-full transition-all cursor-pointer",
-                    idx === activeSlide ? "w-6 bg-brand-emerald" : "w-1.5 bg-border-primary"
-                  )}
-                  aria-label={`Slide ${idx + 1}`}
-                />
-              ))}
-            </div>
-          </div>
+            {/* Slider Navigation Controls Cluster */}
+            <div className="flex items-center justify-between mt-8 pt-4">
+              <div className="flex items-center gap-1.5">
+                {ONBOARDING_SLIDES.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveSlide(idx)}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all cursor-pointer",
+                      idx === activeSlide ? "w-6 bg-brand-emerald" : "w-1.5 bg-border-primary"
+                    )}
+                    aria-label={`Go to slide ${idx + 1}`}
+                  />
+                ))}
+              </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handlePrevSlide}
-              disabled={activeSlide === 0}
-              className="p-2 border border-border-primary text-text-secondary hover:text-text-primary rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleNextSlide}
-              disabled={activeSlide === ONBOARDING_SLIDES.length - 1}
-              className="p-2 border border-border-primary text-text-secondary hover:text-text-primary rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ArrowRight className="h-4 w-4" />
-            </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrevSlide}
+                  disabled={activeSlide === 0}
+                  aria-label="Previous slide"
+                  className="p-2 border border-border-primary text-text-secondary hover:text-text-primary rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleNextSlide}
+                  disabled={activeSlide === ONBOARDING_SLIDES.length - 1}
+                  aria-label="Next slide"
+                  className="p-2 border border-border-primary text-text-secondary hover:text-text-primary rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -173,7 +177,7 @@ export const OnboardingScreen: React.FC = () => {
             </div>
 
             {/* Role List Grid */}
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-3" role="radiogroup" aria-label="Choose Your Role">
               {[
                 {
                   role: USER_ROLES.CUSTOMER,
@@ -181,7 +185,7 @@ export const OnboardingScreen: React.FC = () => {
                   desc: 'Order groceries and household items.',
                   icon: <ShoppingBag className="h-5 w-5" />,
                   color: 'border-brand-emerald hover:bg-brand-emerald/5',
-                  activeBg: 'bg-brand-emerald/10 text-brand-emerald border-brand-emerald',
+                  activeBg: 'ring-2 ring-brand-emerald border-brand-emerald bg-brand-emerald/10 text-brand-emerald',
                 },
                 {
                   role: USER_ROLES.SHOPKEEPER,
@@ -189,7 +193,7 @@ export const OnboardingScreen: React.FC = () => {
                   desc: 'Manage store orders and listings.',
                   icon: <Store className="h-5 w-5" />,
                   color: 'border-brand-violet hover:bg-brand-violet/5',
-                  activeBg: 'bg-brand-violet/10 text-brand-violet border-brand-violet',
+                  activeBg: 'ring-2 ring-brand-violet border-brand-violet bg-brand-violet/10 text-brand-violet',
                 },
                 {
                   role: USER_ROLES.RIDER,
@@ -197,7 +201,7 @@ export const OnboardingScreen: React.FC = () => {
                   desc: 'Accept delivery jobs and earn rewards.',
                   icon: <Bike className="h-5 w-5" />,
                   color: 'border-status-warning hover:bg-status-warning/5',
-                  activeBg: 'bg-status-warning/10 text-status-warning border-status-warning',
+                  activeBg: 'ring-2 ring-status-warning border-status-warning bg-status-warning/10 text-status-warning',
                 },
                 {
                   role: USER_ROLES.ADMIN,
@@ -205,7 +209,7 @@ export const OnboardingScreen: React.FC = () => {
                   desc: 'Access systems command control panels.',
                   icon: <ShieldAlert className="h-5 w-5" />,
                   color: 'border-status-error hover:bg-status-error/5',
-                  activeBg: 'bg-status-error/10 text-status-error border-status-error',
+                  activeBg: 'ring-2 ring-status-error border-status-error bg-status-error/10 text-status-error',
                 },
               ].map((r) => {
                 const isActive = selectedRole === r.role;
@@ -213,21 +217,28 @@ export const OnboardingScreen: React.FC = () => {
                   <motion.button
                     key={r.role}
                     onClick={() => handleRoleSelect(r.role)}
+                    role="radio"
+                    aria-checked={isActive}
                     variants={buttonPress}
                     whileTap="whileTap"
                     whileHover="whileHover"
                     className={cn(
-                      "w-full text-left p-4 rounded-xl border flex items-center gap-4 transition-all cursor-pointer",
+                      "w-full text-left p-4 rounded-xl border flex items-center gap-4 transition-all cursor-pointer relative",
                       isActive ? r.activeBg : "border-border-primary bg-bg-secondary hover:border-text-secondary"
                     )}
                   >
                     <div className="flex-shrink-0 p-2.5 rounded-lg bg-bg-tertiary">
                       {r.icon}
                     </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-text-primary leading-none mb-1">{r.title}</h3>
+                    <div className="flex-1">
+                      <h2 className="text-sm font-semibold text-text-primary leading-none mb-1">{r.title}</h2>
                       <p className="text-xs text-text-secondary leading-normal">{r.desc}</p>
                     </div>
+                    {isActive && (
+                      <div className="flex-shrink-0">
+                        <Check className="h-5 w-5 text-brand-emerald" />
+                      </div>
+                    )}
                   </motion.button>
                 );
               })}
@@ -237,7 +248,12 @@ export const OnboardingScreen: React.FC = () => {
           <button
             onClick={handleGetStarted}
             disabled={!selectedRole}
-            className="w-full mt-8 py-3.5 rounded-xl bg-brand-emerald text-white hover:bg-brand-emerald-hover font-semibold text-sm transition-all focus:ring-2 focus:ring-brand-emerald focus:ring-offset-2 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className={cn(
+              "w-full mt-8 py-3.5 rounded-xl font-semibold text-sm transition-all focus:ring-2 focus:ring-brand-emerald focus:ring-offset-2 flex items-center justify-center gap-2",
+              selectedRole
+                ? "bg-brand-emerald text-white hover:bg-brand-emerald-hover cursor-pointer shadow-md"
+                : "bg-bg-tertiary text-text-secondary border border-border-primary cursor-not-allowed opacity-60"
+            )}
           >
             Continue
             <ArrowRight className="h-4 w-4" />
