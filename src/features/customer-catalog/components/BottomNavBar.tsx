@@ -21,13 +21,13 @@ export const BottomNavBar: React.FC = () => {
   return (
     <>
       {itemCount > 0 && (
-        <div className="fixed bottom-16 left-4 right-4 z-sticky md:hidden">
+        <div className="fixed bottom-16 md:bottom-6 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-md z-sticky">
           <button
             onClick={() => openDrawer('CART')}
-            className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-lg flex items-center justify-between cursor-pointer border border-emerald-500"
+            className="w-full py-3 md:py-4 px-4 md:px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs md:text-sm shadow-lg flex items-center justify-between cursor-pointer border border-emerald-500"
           >
             <div className="flex items-center gap-2">
-              <ShoppingBag className="h-4 w-4" />
+              <ShoppingBag className="h-4 w-4 md:h-5 md:w-5" />
               <span>{itemCount} {itemCount === 1 ? 'item' : 'items'} added</span>
             </div>
             <div className="flex items-center gap-1">
@@ -38,7 +38,8 @@ export const BottomNavBar: React.FC = () => {
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-sticky bg-bg-secondary/95 backdrop-blur-md border-t border-border-primary py-2 px-4 flex items-center justify-around md:hidden shadow-high pointer-events-auto">
+      {/* Mobile Bottom Nav - hidden on desktop */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-sticky bg-bg-secondary/95 backdrop-blur-md border-t border-border-primary py-2 px-4 flex items-center justify-around shadow-high pointer-events-auto">
         {navItems.map((item, idx) => {
           const currentTab = new URLSearchParams(location.search).get('tab');
           const targetTab = item.path.includes('?tab=') ? new URLSearchParams(item.path.split('?')[1]).get('tab') : null;

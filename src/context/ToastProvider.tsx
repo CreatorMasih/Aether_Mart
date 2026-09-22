@@ -44,7 +44,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       {/* Toast Portal Container */}
       <div 
-        className="fixed top-4 right-4 z-toast flex flex-col gap-3 w-full max-w-sm pointer-events-none"
+        className="fixed top-4 right-4 z-9999 flex flex-col gap-3 w-full max-w-sm pointer-events-none"
         role="live"
         aria-live="assertive"
       >
