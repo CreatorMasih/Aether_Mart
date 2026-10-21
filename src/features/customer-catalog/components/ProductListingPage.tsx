@@ -330,7 +330,7 @@ export const ProductListingPage: React.FC = () => {
       {accumulatedProducts.length > 0 ? (
         <div className="space-y-6">
           {viewMode === 'GRID' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {accumulatedProducts.map((product) => {
                 const isWishlisted = wishlist.some(item => item.id === product.id);
                 const cartItem = cartItems.find(item => item.productId === product.id && !item.variantId);

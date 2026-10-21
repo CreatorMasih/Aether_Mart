@@ -8,14 +8,39 @@ import { formatCurrency } from '../../../utils/formatters';
 
 interface StoreCardGridProps {
   stores: Store[];
+  /** Max number of stores to render (defaults to all). */
+  limit?: number;
+  /**
+   * Exact column count for a fixed grid (e.g. 3 for the home preview row).
+   * When omitted the component uses its default responsive grid.
+   */
+  cols?: number;
+  /** 'grid' (default) renders a responsive grid; 'row' renders a single horizontally-scrollable row. */
+  layout?: 'grid' | 'row';
 }
 
-export const StoreCardGrid: React.FC<StoreCardGridProps> = ({ stores }) => {
+export const StoreCardGrid: React.FC<StoreCardGridProps> = ({
+  stores,
+  limit,
+  cols,
+  layout = 'grid',
+}) => {
   const navigate = useNavigate();
 
+  // cols overrides layout so items always fill the row evenly
+  const containerClass = cols
+    ? 'grid gap-4'
+    : layout === 'row'
+      ? 'flex gap-4 overflow-x-auto pb-3 snap-x'
+      : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
+
+  const containerStyle = cols ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` } : undefined;
+
+  const visibleStores = limit ? stores.slice(0, limit) : stores;
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {stores.map((store: any) => {
+    <div className={containerClass} style={containerStyle}>
+      {visibleStores.map((store) => {
         const isClosed = store.isOpen === false || store.isPaused || store.isHoliday;
         const deliveryFeeText = store.deliveryFee === 0 ? 'Free Delivery' : `Delivery ${formatCurrency(store.deliveryFee || 20)}`;
 
@@ -26,7 +51,7 @@ export const StoreCardGrid: React.FC<StoreCardGridProps> = ({ stores }) => {
             initial="initial"
             whileHover="hover"
             onClick={() => navigate(`/c/store/${store.id}`)}
-            className="p-4 rounded-2xl border border-border-primary bg-bg-secondary flex flex-col justify-between shadow-subtle relative select-none cursor-pointer hover:border-brand-emerald/40 transition-all group"
+            className={`p-4 rounded-2xl border border-border-primary bg-bg-secondary flex flex-col justify-between shadow-subtle relative select-none cursor-pointer hover:border-brand-emerald/40 transition-all group ${layout === 'row' && !cols ? 'min-w-[260px] max-w-[280px] shrink-0 snap-start' : ''}`}
           >
             <div className="flex gap-3 items-start">
               {/* Logo / Image Circle */}
@@ -87,7 +112,7 @@ export const StoreCardGrid: React.FC<StoreCardGridProps> = ({ stores }) => {
                 )}
                 <div className="flex items-center gap-1 font-bold text-brand-emerald">
                   <Clock className="h-3.5 w-3.5" />
-                  {store.deliveryTimeMins || store.deliveryTime || 25} min
+                  {store.deliveryTimeMins || 25} min
                 </div>
                 <div className="flex items-center gap-1 text-[10px] font-bold text-text-secondary">
                   <Truck className="h-3 w-3" />

@@ -170,6 +170,28 @@ async function main() {
   });
   await prisma.user.deleteMany({ where: { id: { in: uatUserIds } } });
 
+  // ── Clean up duplicate QA categories left by test-phase22 ────────────────
+  // Keep at most one of each QA category (the one with the canonical slug).
+  // Any extra rows (created with slug `groceries-qa-<timestamp>`) are removed.
+  const canonicalSlugs = ['groceries-qa', 'dairy-qa'];
+  for (const canonical of canonicalSlugs) {
+    const allRows = await prisma.category.findMany({
+      where: { slug: { startsWith: canonical.replace('-qa', '') + '-qa' } },
+      orderBy: { createdAt: 'asc' },
+    });
+    // Keep the first (oldest) row; delete the rest
+    const toDelete = allRows.slice(1).map((r) => r.id);
+    if (toDelete.length > 0) {
+      // Reassign or delete products attached to these duplicate categories first
+      await prisma.product.updateMany({
+        where: { categoryId: { in: toDelete } },
+        data: { categoryId: allRows[0].id },
+      });
+      await prisma.category.deleteMany({ where: { id: { in: toDelete } } });
+      console.log(`🗑️  Removed ${toDelete.length} duplicate(s) of category "${canonical}"`);
+    }
+  }
+
   console.log('✅ UAT records successfully cleaned up! Production records were preserved untouched.');
 }
 

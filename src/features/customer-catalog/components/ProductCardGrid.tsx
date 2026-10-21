@@ -12,9 +12,29 @@ import type { Product } from '../../../types';
 
 interface ProductCardGridProps {
   products: Product[];
+  /** Max number of products to render (defaults to all). */
+  limit?: number;
+  /**
+   * Exact column count for a fixed grid (e.g. 4 for the home preview row).
+   * When omitted the component uses its default responsive grid.
+   */
+  cols?: number;
+  /**
+   * When true, uses auto-fill with a min card width so cards stay compact
+   * regardless of how many items are returned. Used for home preview rows.
+   */
+  compact?: boolean;
+  /** 'grid' (default) renders a responsive grid; 'row' renders a single horizontally-scrollable row. */
+  layout?: 'grid' | 'row';
 }
 
-export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) => {
+export const ProductCardGrid: React.FC<ProductCardGridProps> = ({
+  products,
+  limit,
+  cols,
+  compact = false,
+  layout = 'grid',
+}) => {
   const navigate = useNavigate();
   const { wishlist, toggleWishlist } = useCustomerStore();
   const { addToCart, updateQuantity } = useCartMutations();
@@ -24,9 +44,29 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
     navigate(`/c/product/${id}`);
   };
 
+  // compact: auto-fill with a fixed min width so cards never stretch too wide.
+  // cols:    explicit column count, fills full width evenly.
+  // default: responsive Tailwind grid.
+  const containerClass = compact
+    ? 'grid gap-3'
+    : cols
+      ? 'grid gap-4'
+      : layout === 'row'
+        ? 'flex gap-4 overflow-x-auto pb-3 snap-x'
+        : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4';
+
+  // 175px min keeps cards visually small; 1fr lets them grow to fill gaps
+  const containerStyle: React.CSSProperties | undefined = compact
+    ? { gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))' }
+    : cols
+      ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
+      : undefined;
+
+  const visibleProducts = limit ? products.slice(0, limit) : products;
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-      {products.map((product) => {
+    <div className={containerClass} style={containerStyle}>
+      {visibleProducts.map((product) => {
         const isWishlisted = wishlist.some((item) => item.id === product.id);
         const defaultVariantId = product.variants?.[0]?.id || null;
         const cartItem = cartItems.find((item) =>
@@ -47,7 +87,10 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({ products }) =>
             variants={cardHover}
             initial="initial"
             whileHover="hover"
-            className="rounded-2xl border border-border-primary bg-bg-secondary p-3 flex flex-col justify-between shadow-subtle relative overflow-hidden group select-none"
+            className={cn(
+              "rounded-2xl border border-border-primary bg-bg-secondary p-3 flex flex-col justify-between shadow-subtle relative overflow-hidden group select-none",
+              layout === 'row' && !cols && "min-w-[170px] max-w-[190px] shrink-0 snap-start"
+            )}
           >
             {/* Absolute Wishlist Button */}
             <button

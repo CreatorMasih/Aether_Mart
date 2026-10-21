@@ -32,11 +32,17 @@ async function testPhase22() {
     await prisma.store.update({ where: { id: storeLow.id }, data: { rating: 3.5 } });
   }
 
-  const catGroceries = await prisma.category.findFirst({ where: { name: { contains: 'Grocery', mode: 'insensitive' } } })
-    || await prisma.category.create({ data: { name: 'Groceries QA', slug: `groceries-qa-${Date.now()}` } });
-  
-  const catDairy = await prisma.category.findFirst({ where: { name: { contains: 'Dairy', mode: 'insensitive' } } })
-    || await prisma.category.create({ data: { name: 'Dairy QA', slug: `dairy-qa-${Date.now()}` } });
+  const catGroceries = await prisma.category.upsert({
+    where: { slug: 'groceries-qa' },
+    update: {},
+    create: { name: 'Groceries QA', slug: 'groceries-qa' },
+  });
+
+  const catDairy = await prisma.category.upsert({
+    where: { slug: 'dairy-qa' },
+    update: {},
+    create: { name: 'Dairy QA', slug: 'dairy-qa' },
+  });
 
   // Seed Product A (Organic Honey, Groceries, ₹250, Store Rating 4.8)
   const productA = await prisma.product.create({

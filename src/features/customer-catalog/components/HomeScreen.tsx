@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { History, MapPin, Star, Milk, Pill, Apple, AlertTriangle, Zap, Shield, CheckCircle } from 'lucide-react';
+import { MapPin, Star, AlertTriangle, Zap, Shield, CheckCircle, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
 import { catalogService } from '../services/catalog-service';
@@ -14,7 +15,8 @@ import { DEFAULT_MAHASAMUND_ADDRESS, checkLocationServiceability } from '../../.
 import { SEOHead } from '../../../components/seo/SEOHead';
 
 export const HomeScreen: React.FC = () => {
-  const { recentlyViewed, selectedAddress, setSelectedAddress } = useCustomerStore();
+  const navigate = useNavigate();
+  const { selectedAddress, setSelectedAddress } = useCustomerStore();
 
   // Auto-resolve location on mount if not selected
   useEffect(() => {
@@ -61,33 +63,39 @@ export const HomeScreen: React.FC = () => {
     enabled: isServiceable,
   });
 
-  // Parallel Category Shelf Queries
-  const { data: dailyEssentialsRes } = useQuery({
-    queryKey: queryKeys.products({ category: 'daily-essentials', limit: 4 }),
-    queryFn: () => catalogService.getProducts({ category: 'daily-essentials', limit: 4 }),
+  // Fetch categories so the "Shop by Category" header can surface a View All
+  // link when more categories exist than the preview row shows. Shares the same
+  // query key as CategoryCircleGrid, so this adds no extra network requests.
+  const { data: categories } = useQuery({
+    queryKey: queryKeys.categories(),
+    queryFn: () => catalogService.getCategories(),
+    enabled: isServiceable,
   });
 
-  const { data: pharmacyRes } = useQuery({
-    queryKey: queryKeys.products({ category: 'pharmacy', limit: 4 }),
-    queryFn: () => catalogService.getProducts({ category: 'pharmacy', limit: 4 }),
-  });
+  // Parallel Category Shelf Queries — removed (sections 6–9 removed from home page)
 
-  const { data: freshProduceRes } = useQuery({
-    queryKey: queryKeys.products({ category: 'fresh-fruits-and-vegetables', limit: 4 }),
-    queryFn: () => catalogService.getProducts({ category: 'fresh-fruits-and-vegetables', limit: 4 }),
-  });
+  // Number of items shown per home section before a "View All" link appears.
+  const CATEGORY_PREVIEW = 6;
+  const STORE_PREVIEW = 3;
+  const TOP_PICKS_PREVIEW = 6;
 
-  const { data: personalCareRes } = useQuery({
-    queryKey: queryKeys.products({ category: 'personal-care', limit: 4 }),
-    queryFn: () => catalogService.getProducts({ category: 'personal-care', limit: 4 }),
-  });
+  const renderViewAllButton = (to: string) => (
+    <button
+      onClick={() => navigate(to)}
+      className="flex items-center gap-0.5 text-xs font-extrabold text-emerald-600 hover:underline cursor-pointer shrink-0"
+    >
+      View All
+      <ChevronRight className="h-3.5 w-3.5" />
+    </button>
+  );
 
-  const dailyEssentialsProducts = dailyEssentialsRes?.products || [];
-  const pharmacyProducts = pharmacyRes?.products || [];
-  const freshProduceProducts = freshProduceRes?.products || [];
-  const personalCareProducts = personalCareRes?.products || [];
-
-  const renderSectionHeader = (icon: React.ReactNode, title: string, subtitle?: string, badge?: string) => (
+  const renderSectionHeader = (
+    icon: React.ReactNode,
+    title: string,
+    subtitle?: string,
+    badge?: string,
+    viewAllTo?: string,
+  ) => (
     <div className="flex items-center justify-between mb-4 select-none">
       <div className="flex items-center gap-2">
         <div className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-emerald-600 shadow-xs">
@@ -105,6 +113,7 @@ export const HomeScreen: React.FC = () => {
           {subtitle && <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{subtitle}</p>}
         </div>
       </div>
+      {viewAllTo && renderViewAllButton(viewAllTo)}
     </div>
   );
 
@@ -220,16 +229,25 @@ export const HomeScreen: React.FC = () => {
       <section aria-label="Browse Categories" className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-extrabold text-slate-900 font-heading">Shop by Category</h2>
+          {categories && categories.length > CATEGORY_PREVIEW && renderViewAllButton('/c/categories')}
         </div>
-        <CategoryCircleGrid />
+        {/* grid-cols-6 keeps all preview cards in one even row */}
+        <CategoryCircleGrid limit={CATEGORY_PREVIEW} cols={CATEGORY_PREVIEW} />
       </section>
 
       {/* 3. Available Stores Near You */}
       <section aria-label="Stores near you" className="space-y-4">
         {feed.nearbyStores.length > 0 ? (
           <div>
-            {renderSectionHeader(<MapPin className="h-5 w-5 text-emerald-600" />, 'Available Stores Near You', 'Top stores delivering in Mahasamund')}
-            <StoreCardGrid stores={feed.nearbyStores} />
+            {renderSectionHeader(
+              <MapPin className="h-5 w-5 text-emerald-600" />,
+              'Available Stores Near You',
+              'Top stores delivering in Mahasamund',
+              undefined,
+              feed.nearbyStores.length > STORE_PREVIEW ? '/c/stores' : undefined,
+            )}
+            {/* grid fills full width; STORE_PREVIEW=3 gives 3 equal columns */}
+            <StoreCardGrid stores={feed.nearbyStores} limit={STORE_PREVIEW} cols={STORE_PREVIEW} />
           </div>
         ) : (
           <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 text-center space-y-2 select-none">
@@ -244,50 +262,22 @@ export const HomeScreen: React.FC = () => {
       {/* 4. Top Picks for You */}
       {feed.recommendedProducts.length > 0 && (
         <section className="space-y-3">
-          {renderSectionHeader(<Star className="h-5 w-5 fill-amber-400 text-amber-400" />, 'Top Picks for You', 'Fresh daily essentials from local stores')}
-          <ProductCardGrid products={feed.recommendedProducts} />
+          {renderSectionHeader(
+            <Star className="h-5 w-5 fill-amber-400 text-amber-400" />,
+            'Top Picks for You',
+            'Fresh daily essentials from local stores',
+            undefined,
+            feed.recommendedProducts.length > TOP_PICKS_PREVIEW ? '/c/category/all' : undefined,
+          )}
+          {/* compact mode: auto-fill 175px-min cards, never stretches wide */}
+          <ProductCardGrid
+            products={feed.recommendedProducts}
+            limit={TOP_PICKS_PREVIEW}
+            compact
+          />
         </section>
       )}
 
-      {/* 5. Recently Viewed / Continue Shopping */}
-      {recentlyViewed.length > 0 && (
-        <section className="space-y-3">
-          {renderSectionHeader(<History className="h-5 w-5 text-emerald-600" />, 'Continue Shopping', 'Pick up where you left off')}
-          <ProductCardGrid products={recentlyViewed.slice(0, 4)} />
-        </section>
-      )}
-
-      {/* 6. Daily Essentials Shelf */}
-      {dailyEssentialsProducts.length > 0 && (
-        <section className="space-y-3">
-          {renderSectionHeader(<Milk className="h-5 w-5 text-emerald-600" />, 'Daily Essentials', 'Milk, bread, butter, eggs & bakery')}
-          <ProductCardGrid products={dailyEssentialsProducts} />
-        </section>
-      )}
-
-      {/* 7. Pharmacy Shelf */}
-      {pharmacyProducts.length > 0 && (
-        <section className="space-y-3">
-          {renderSectionHeader(<Pill className="h-5 w-5 text-emerald-600" />, 'Pharmacy Essentials', 'OTC medicines, wellness, and personal care')}
-          <ProductCardGrid products={pharmacyProducts} />
-        </section>
-      )}
-
-      {/* 8. Fresh Produce Shelf */}
-      {freshProduceProducts.length > 0 && (
-        <section className="space-y-3">
-          {renderSectionHeader(<Apple className="h-5 w-5 text-emerald-600" />, 'Fresh Fruits & Vegetables', 'Farm-fresh organic vegetables and seasonal fruits')}
-          <ProductCardGrid products={freshProduceProducts} />
-        </section>
-      )}
-
-      {/* 9. Personal Care Shelf */}
-      {personalCareProducts.length > 0 && (
-        <section className="space-y-3">
-          {renderSectionHeader(<Apple className="h-5 w-5 text-emerald-600" />, 'Personal Care & Hygiene', 'Skincare, haircare, and personal hygiene')}
-          <ProductCardGrid products={personalCareProducts} />
-        </section>
-      )}
     </motion.div>
     </>
   );

@@ -47,46 +47,21 @@ async function clearDatabase() {
   // Seed base product categories required for real product categorization
   console.log('📦 Seeding standard categories...');
   const categories = [
-    {
-      id: 'cat-grocery',
-      slug: 'daily-essentials',
-      name: 'Daily Essentials & Grocery',
-      imageUrl: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&q=80',
-    },
-    {
-      id: 'cat-fruits-veg',
-      slug: 'fresh-fruits-and-vegetables',
-      name: 'Fresh Fruits & Vegetables',
-      imageUrl: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=500&q=80',
-    },
-    {
-      id: 'cat-pharmacy',
-      slug: 'pharmacy',
-      name: 'Pharmacy & Wellness',
-      imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500&q=80',
-    },
-    {
-      id: 'cat-personal-care',
-      slug: 'personal-care',
-      name: 'Personal Care & Hygiene',
-      imageUrl: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=500&q=80',
-    },
-    {
-      id: 'cat-dairy-eggs',
-      slug: 'dairy-and-eggs',
-      name: 'Dairy, Milk & Eggs',
-      imageUrl: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&q=80',
-    },
-    {
-      id: 'cat-pet-care',
-      slug: 'pet-care',
-      name: 'Pet Care & Supplies',
-      imageUrl: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=500&q=80',
-    },
+    { slug: 'daily-essentials',           name: 'Daily Essentials',     imageUrl: '🥛' },
+    { slug: 'fresh-fruits-and-vegetables', name: 'Fresh Produce',        imageUrl: '🍎' },
+    { slug: 'pharmacy',                   name: 'Pharmacy',              imageUrl: '💊' },
+    { slug: 'personal-care',              name: 'Personal Care',         imageUrl: '🧴' },
+    { slug: 'dairy-and-eggs',             name: 'Dairy & Eggs',          imageUrl: '🥚' },
+    { slug: 'pet-care',                   name: 'Pet Care',              imageUrl: '🐶' },
+    { slug: 'electronics',               name: 'Electronics',            imageUrl: '📱' },
   ];
 
   for (const cat of categories) {
-    await prisma.category.create({ data: cat });
+    await prisma.category.upsert({
+      where: { slug: cat.slug },
+      update: { name: cat.name, imageUrl: cat.imageUrl },
+      create: cat,
+    });
   }
 
   console.log('✨ Base categories created cleanly.');
