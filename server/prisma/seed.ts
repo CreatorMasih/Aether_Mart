@@ -338,23 +338,35 @@ async function main() {
 
   // 7. Categories
   console.log('🗂️ Seeding Categories...');
-  const catDaily = await prisma.category.create({
-    data: { name: 'Daily Essentials', slug: 'daily-essentials', imageUrl: '🥛' },
+  const catDaily = await prisma.category.upsert({
+    where: { slug: 'daily-essentials' },
+    update: { name: 'Daily Essentials', imageUrl: '🥛' },
+    create: { name: 'Daily Essentials', slug: 'daily-essentials', imageUrl: '🥛' },
   });
-  const catFresh = await prisma.category.create({
-    data: { name: 'Fresh Produce', slug: 'fresh-fruits-and-vegetables', imageUrl: '🍎' },
+  const catFresh = await prisma.category.upsert({
+    where: { slug: 'fresh-fruits-and-vegetables' },
+    update: { name: 'Fresh Produce', imageUrl: '🍎' },
+    create: { name: 'Fresh Produce', slug: 'fresh-fruits-and-vegetables', imageUrl: '🍎' },
   });
-  const catPharmacy = await prisma.category.create({
-    data: { name: 'Pharmacy', slug: 'pharmacy', imageUrl: '💊' },
+  const catPharmacy = await prisma.category.upsert({
+    where: { slug: 'pharmacy' },
+    update: { name: 'Pharmacy', imageUrl: '💊' },
+    create: { name: 'Pharmacy', slug: 'pharmacy', imageUrl: '💊' },
   });
-  const catPersonal = await prisma.category.create({
-    data: { name: 'Personal Care', slug: 'personal-care', imageUrl: '🧴' },
+  const catPersonal = await prisma.category.upsert({
+    where: { slug: 'personal-care' },
+    update: { name: 'Personal Care', imageUrl: '🧴' },
+    create: { name: 'Personal Care', slug: 'personal-care', imageUrl: '🧴' },
   });
-  const catPet = await prisma.category.create({
-    data: { name: 'Pet Care', slug: 'pet-care', imageUrl: '🐶' },
+  const catPet = await prisma.category.upsert({
+    where: { slug: 'pet-care' },
+    update: { name: 'Pet Care', imageUrl: '🐶' },
+    create: { name: 'Pet Care', slug: 'pet-care', imageUrl: '🐶' },
   });
-  const catElectronics = await prisma.category.create({
-    data: { name: 'Electronics', slug: 'electronics', imageUrl: '📱' },
+  const catElectronics = await prisma.category.upsert({
+    where: { slug: 'electronics' },
+    update: { name: 'Electronics', imageUrl: '📱' },
+    create: { name: 'Electronics', slug: 'electronics', imageUrl: '📱' },
   });
 
   // 8. Products, Images, Variants & Inventory
