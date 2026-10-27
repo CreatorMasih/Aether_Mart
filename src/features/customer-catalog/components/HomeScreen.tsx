@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MapPin, Star, AlertTriangle, Zap, Shield, CheckCircle, ChevronRight } from 'lucide-react';
+import { MapPin, Star, AlertTriangle, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCustomerStore } from '../store/customer-store';
 import { catalogService } from '../services/catalog-service';
@@ -170,60 +170,16 @@ export const HomeScreen: React.FC = () => {
         animate="animate"
         className="space-y-8 pb-12"
       >
-        {/* 1. CUSTOMER HERO SECTION (Matching Reference Design Target) */}
+        {/* 1. HERO BANNER IMAGE */}
         <section aria-label="Hero Banner" className="select-none">
-          <div className="relative w-full rounded-3xl bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-6 sm:p-8 text-white overflow-hidden shadow-lg border border-emerald-700/40">
-            {/* Decorative radial gradients */}
-            <div className="absolute -top-12 -right-12 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-              {/* Left Content Column */}
-              <div className="space-y-4 max-w-xl text-center md:text-left">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-emerald-200 text-xs font-bold font-heading">
-                  <Zap className="h-3.5 w-3.5 text-amber-300 fill-amber-300" />
-                  <span>10-30 mins delivery in Mahasamund</span>
-                </div>
-
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight font-heading leading-tight text-white">
-                  Everything you need, delivered locally in Mahasamund
-                </h1>
-
-                <p className="text-xs sm:text-sm text-emerald-100/90 font-medium leading-relaxed max-w-md">
-                  Order food, groceries, medicines, daily essentials and more from trusted local stores and businesses in Mahasamund.
-                </p>
-
-              {/* Service Highlight Badges */}
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1">
-                <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
-                  <Zap className="h-3.5 w-3.5 text-amber-300" />
-                  <span>Fast Delivery</span>
-                </div>
-                <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
-                  <CheckCircle className="h-3.5 w-3.5 text-emerald-300" />
-                  <span>Best Quality</span>
-                </div>
-                <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5 text-blue-300" />
-                  <span>Secure Payment</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Hero Visual Illustration */}
-            <div className="relative shrink-0 w-48 sm:w-64 md:w-72 aspect-4/3 rounded-2xl overflow-hidden border border-white/20 bg-white/10 backdrop-blur-md p-1.5 shadow-2xl">
-              <img
-                src="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80"
-                alt="Fresh Groceries Mahasamund"
-                className="w-full h-full object-cover rounded-xl"
-              />
-              <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-xl bg-emerald-600/95 backdrop-blur-md text-white text-[10px] font-extrabold flex items-center gap-1 shadow-md border border-white/20">
-                <span>🛵</span> 10-30 mins
-              </div>
-            </div>
+          <div className="w-full rounded-3xl overflow-hidden shadow-lg">
+            <img
+              src="/Fresh_Groceries_Delivered_in_Mahasamund.png"
+              alt="Fresh Groceries — Aether Mart Mahasamund"
+              className="w-full h-44 sm:h-56 md:h-70 object-cover"
+            />
           </div>
-        </div>
-      </section>
+        </section>
 
       {/* 2. Shop by Category */}
       <section aria-label="Browse Categories" className="space-y-3">
