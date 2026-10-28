@@ -150,10 +150,10 @@ export const CustomerDashboardPage: React.FC = () => {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="grid grid-cols-1 md:grid-cols-4 gap-8 pb-12 select-none"
+      className="grid grid-cols-1 md:grid-cols-4 gap-6 pb-12 select-none"
     >
-      {/* Sidebar Navigation */}
-      <div className="md:col-span-1 space-y-3.5">
+      {/* ── SIDEBAR NAVIGATION (desktop only) ── */}
+      <div className="hidden md:block md:col-span-1 space-y-3.5">
         <div className="p-4 border border-border-primary rounded-2xl bg-bg-secondary flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-brand-emerald text-white flex items-center justify-center font-heading font-extrabold text-sm uppercase">
             {fullName.charAt(0) || user?.phone.charAt(0) || 'U'}
@@ -201,9 +201,61 @@ export const CustomerDashboardPage: React.FC = () => {
         </nav>
       </div>
 
+      {/* ── MOBILE PROFILE HEADER + TAB BAR ── */}
+      <div className="md:hidden col-span-1 space-y-3">
+        {/* User identity strip */}
+        <div className="p-3 border border-border-primary rounded-2xl bg-bg-secondary flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-brand-emerald text-white flex items-center justify-center font-heading font-extrabold text-sm uppercase shrink-0">
+            {fullName.charAt(0) || user?.phone.charAt(0) || 'U'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-xs font-bold text-text-primary truncate">{fullName || 'Aether Customer'}</h3>
+            <p className="text-[10px] text-text-secondary truncate font-semibold mt-0.5">{user?.phone}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-xl border border-status-error/30 text-status-error hover:bg-status-error/10 transition-all cursor-pointer shrink-0"
+            aria-label="Logout"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Horizontal scrollable tab pills */}
+        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+          <div className="flex gap-2 w-max">
+            {[
+              { id: 'profile', label: 'Profile', icon: User },
+              { id: 'orders', label: 'Orders', icon: ShoppingBag },
+              { id: 'wallet', label: 'Wallet', icon: Wallet },
+              { id: 'notifications', label: 'Alerts', icon: Bell },
+              { id: 'support', label: 'Support', icon: HelpCircle }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setSearchParams({ tab: tab.id })}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border",
+                    isSelected
+                      ? "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/30"
+                      : "text-text-secondary border-border-primary bg-bg-secondary hover:text-text-primary hover:bg-bg-tertiary"
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Main Panel Content */}
-      <div className="md:col-span-3">
-        <div className="p-6 rounded-2xl border border-border-primary bg-bg-secondary min-h-[50vh]">
+      <div className="col-span-1 md:col-span-3">
+        <div className="p-4 sm:p-6 rounded-2xl border border-border-primary bg-bg-secondary min-h-[50vh]">
           
           {/* TAB 1: Profile & Settings */}
           {activeTab === 'profile' && (
@@ -213,7 +265,7 @@ export const CustomerDashboardPage: React.FC = () => {
               </h2>
 
               <form onSubmit={handleUpdateProfile} className="space-y-4 max-w-md text-xs font-semibold">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label htmlFor="fullName" className="text-[10px] font-bold text-text-secondary uppercase">Full Name</label>
                     <input 
@@ -389,9 +441,9 @@ export const CustomerDashboardPage: React.FC = () => {
                         ))}
                       </div>
 
-                      <div className="border-t border-border-primary/60 pt-2 flex items-center justify-between">
+                      <div className="border-t border-border-primary/60 pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <span className="font-extrabold text-text-primary">Total: {formatCurrency(order.totalAmount)}</span>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           {['PLACED', 'CONFIRMED'].includes(order.status) && (
                             <button
                               onClick={async () => {

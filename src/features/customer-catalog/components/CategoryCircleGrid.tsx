@@ -44,7 +44,7 @@ export const CategoryCircleGrid: React.FC<CategoryCircleGridProps> = ({
     ? `grid gap-3`
     : layout === 'row'
       ? 'flex gap-4 overflow-x-auto pb-3 snap-x'
-      : 'grid grid-cols-3 sm:grid-cols-6 gap-4';
+      : 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3';
 
   const containerStyle = cols ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` } : undefined;
 

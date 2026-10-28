@@ -39,7 +39,7 @@ export const BottomNavBar: React.FC = () => {
       )}
 
       {/* Mobile Bottom Nav - hidden on desktop */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-sticky bg-bg-secondary/95 backdrop-blur-md border-t border-border-primary py-2 px-4 flex items-center justify-around shadow-high pointer-events-auto">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-sticky bg-bg-secondary/95 backdrop-blur-md border-t border-border-primary py-2 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-high pointer-events-auto">
         {navItems.map((item, idx) => {
           const currentTab = new URLSearchParams(location.search).get('tab');
           const targetTab = item.path.includes('?tab=') ? new URLSearchParams(item.path.split('?')[1]).get('tab') : null;
