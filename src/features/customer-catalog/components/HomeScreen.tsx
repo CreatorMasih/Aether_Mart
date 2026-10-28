@@ -168,15 +168,15 @@ export const HomeScreen: React.FC = () => {
         variants={pageTransition}
         initial="initial"
         animate="animate"
-        className="space-y-8 pb-12"
+        className="space-y-5 sm:space-y-8 pb-12"
       >
         {/* 1. HERO BANNER IMAGE */}
         <section aria-label="Hero Banner" className="select-none">
-          <div className="w-full rounded-3xl overflow-hidden shadow-lg">
+          <div className="w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg">
             <img
               src="/Fresh_Groceries_Delivered_in_Mahasamund.png"
               alt="Fresh Groceries — Aether Mart Mahasamund"
-              className="w-full h-44 sm:h-56 md:h-70 object-cover"
+              className="w-full h-auto sm:h-56 md:h-70 object-contain sm:object-cover"
             />
           </div>
         </section>
@@ -187,8 +187,8 @@ export const HomeScreen: React.FC = () => {
           <h2 className="text-base font-extrabold text-slate-900 font-heading">Shop by Category</h2>
           {categories && categories.length > CATEGORY_PREVIEW && renderViewAllButton('/c/categories')}
         </div>
-        {/* grid-cols-6 keeps all preview cards in one even row */}
-        <CategoryCircleGrid limit={CATEGORY_PREVIEW} cols={CATEGORY_PREVIEW} />
+        {/* Responsive grid: 3 cols on mobile, 6 on desktop */}
+        <CategoryCircleGrid limit={CATEGORY_PREVIEW} />
       </section>
 
       {/* 3. Available Stores Near You */}
@@ -202,8 +202,8 @@ export const HomeScreen: React.FC = () => {
               undefined,
               feed.nearbyStores.length > STORE_PREVIEW ? '/c/stores' : undefined,
             )}
-            {/* grid fills full width; STORE_PREVIEW=3 gives 3 equal columns */}
-            <StoreCardGrid stores={feed.nearbyStores} limit={STORE_PREVIEW} cols={STORE_PREVIEW} />
+            {/* Responsive grid: 1 col on mobile, 3 on desktop */}
+            <StoreCardGrid stores={feed.nearbyStores} limit={STORE_PREVIEW} />
           </div>
         ) : (
           <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 text-center space-y-2 select-none">

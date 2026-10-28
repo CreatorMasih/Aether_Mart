@@ -41,49 +41,23 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-100 bg-bg-secondary/90 backdrop-blur-md border-b border-border-primary w-full">
-      {/* Mobile Layout */}
-      <div className="md:hidden flex flex-col gap-3 px-4 py-2">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <img 
-              src="/Aether_Mart_Logo-preview.png"
-              alt="Aether Mart"
-              onClick={() => navigate('/c/home')}
-              className="h-20 w-auto cursor-pointer select-none"
-            />
-            <div className="h-6 w-px bg-border-primary hidden sm:block" />
+      {/* Mobile Layout — Logo | Location | Search only */}
+      <div className="md:hidden flex flex-col gap-2 px-3 py-2">
+        {/* Row 1: Logo | Location */}
+        <div className="flex items-center gap-2">
+          <img
+            src="/Aether_Mart_Logo-preview.png"
+            alt="Aether Mart"
+            onClick={() => navigate('/c/home')}
+            className="h-14 w-auto cursor-pointer select-none shrink-0"
+          />
+          <div className="h-5 w-px bg-border-primary shrink-0" />
+          <div className="min-w-0 flex-1">
             <LocationSelector />
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Cart Button */}
-            <button
-              onClick={() => openDrawer('CART')}
-              className="px-3 py-1.5 rounded-xl border border-brand-emerald/30 bg-brand-emerald/10 text-brand-emerald hover:bg-brand-emerald/20 transition-all relative flex items-center gap-1.5 cursor-pointer font-bold text-xs font-heading"
-              aria-label="Open cart drawer"
-            >
-              <ShoppingBag className="h-4 w-4" />
-              <span>Cart</span>
-              {itemCount > 0 && (
-                <span className="h-5 min-w-5 px-1 rounded-full bg-brand-emerald text-white text-[10px] font-extrabold flex items-center justify-center">
-                  {itemCount}
-                </span>
-              )}
-            </button>
-
-            {/* Notification Bell */}
-            <button
-              onClick={onNotificationClick}
-              className="p-2 rounded-xl border border-border-primary bg-bg-secondary text-text-secondary hover:text-text-primary transition-all relative cursor-pointer"
-              aria-label="Open notifications center"
-            >
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-status-error" />
-            </button>
           </div>
         </div>
 
-        {/* Mobile Search */}
+        {/* Row 2: Search bar */}
         <div className="relative">
           <form onSubmit={handleSearchSubmit} className="relative">
             <input

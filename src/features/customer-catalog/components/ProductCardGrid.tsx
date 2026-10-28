@@ -48,14 +48,15 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({
   // cols:    explicit column count, fills full width evenly.
   // default: responsive Tailwind grid.
   const containerClass = compact
-    ? 'grid gap-3'
+    ? 'grid gap-3 product-grid-compact'
     : cols
       ? 'grid gap-4'
       : layout === 'row'
         ? 'flex gap-4 overflow-x-auto pb-3 snap-x'
         : 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4';
 
-  // 175px min keeps cards visually small; 1fr lets them grow to fill gaps
+  // 175px min keeps cards visually small on desktop; 1fr lets them grow to fill gaps.
+  // On mobile (<640px) the product-grid-compact CSS class overrides to 2 fixed cols.
   const containerStyle: React.CSSProperties | undefined = compact
     ? { gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))' }
     : cols
@@ -88,8 +89,8 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({
             initial="initial"
             whileHover="hover"
             className={cn(
-              "rounded-2xl border border-border-primary bg-bg-secondary p-3 flex flex-col justify-between shadow-subtle relative overflow-hidden group select-none",
-              layout === 'row' && !cols && "min-w-[170px] max-w-[190px] shrink-0 snap-start"
+              "rounded-2xl border border-border-primary bg-bg-secondary p-3 flex flex-col justify-between shadow-subtle relative overflow-hidden group select-none isolate",
+              layout === 'row' && !cols && "min-w-42.5 max-w-47.5 shrink-0 snap-start"
             )}
           >
             {/* Absolute Wishlist Button */}
@@ -98,7 +99,7 @@ export const ProductCardGrid: React.FC<ProductCardGridProps> = ({
                 e.stopPropagation();
                 toggleWishlist(product);
               }}
-              className="absolute top-3 right-3 p-1.5 rounded-full bg-bg-secondary/80 backdrop-blur-md border border-border-primary/40 shadow-subtle text-text-secondary hover:text-status-error z-10 transition-colors cursor-pointer"
+              className="absolute top-3 right-3 p-1.5 rounded-full bg-bg-secondary/80 backdrop-blur-md border border-border-primary/40 shadow-subtle text-text-secondary hover:text-status-error z-1 transition-colors cursor-pointer"
               aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
             >
               <Heart className={cn("h-4 w-4 transition-transform active:scale-125", isWishlisted && "fill-status-error text-status-error")} />

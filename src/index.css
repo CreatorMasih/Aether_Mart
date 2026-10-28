@@ -91,3 +91,12 @@
     @apply outline-none ring-2 ring-brand-emerald ring-offset-2 ring-offset-bg-secondary;
   }
 }
+
+/* Mobile override for compact product grid:
+   On phones (<640px) force 2 equal columns regardless of the auto-fill inline style.
+   Above sm breakpoint the inline style (auto-fill minmax 175px) takes over naturally. */
+@media (max-width: 639px) {
+  .product-grid-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}

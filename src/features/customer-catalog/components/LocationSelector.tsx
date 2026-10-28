@@ -110,7 +110,7 @@ export const LocationSelector: React.FC = () => {
         <div className="min-w-0">
           <p className="text-[9px] font-bold text-slate-500 leading-none">Delivering to</p>
           <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-xs font-extrabold text-slate-900 font-heading truncate max-w-[110px] sm:max-w-[150px]">
+            <span className="text-xs font-extrabold text-slate-900 font-heading truncate max-w-27.5 sm:max-w-37.5">
               {activeAddress.city || 'Mahasamund'}
             </span>
             {isServiceable ? (
@@ -133,7 +133,7 @@ export const LocationSelector: React.FC = () => {
           {/* Backdrop */}
           <div className="fixed inset-0 z-100" onClick={() => setIsDropdownOpen(false)} />
 
-          <div className="absolute left-0 top-full mt-2 w-80 sm:w-84 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-200 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="fixed left-3 right-3 top-26 sm:absolute sm:left-0 sm:right-auto sm:top-full sm:mt-2 sm:w-84 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-200 animate-in fade-in slide-in-from-top-2 duration-150">
             <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
               <p className="text-xs font-extrabold text-slate-900 font-heading">Your Delivery Location</p>
               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Mahasamund Only</span>
